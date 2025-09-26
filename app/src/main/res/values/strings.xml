@@ -8,4 +8,11 @@
     <string name="record_start_finish">Finish</string>
     <string name="record_no_permission">Could not get permission to access the microphone.</string>
     <string name="record_clip_indicator">Clip</string>
+
+    <string name="settings_audio_device">Audio Device</string>
+    <string name="settings_sampling_rate">Sampling Rate</string>
+    <string name="settings_bit_depth">Bit-Depth</string>
+    <string name="settings_n_channels_before">utilize</string>
+
+    <string name="error_no_audio_manager">Couldn\'t access the AudioManager API</string>
 </resources>
