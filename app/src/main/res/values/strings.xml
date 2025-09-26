@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">HQRecorder</string>
+    <string name="title_record">Record</string>
+    <string name="title_recordings">Recordings</string>
+    <string name="title_settings">Settings</string>
+
+    <string name="record_start_next_take">New Take</string>
+    <string name="record_start_finish">Finish</string>
+    <string name="record_no_permission">Could not get permission to access the microphone.</string>
+    <string name="record_clip_indicator">Clip</string>
+</resources>
