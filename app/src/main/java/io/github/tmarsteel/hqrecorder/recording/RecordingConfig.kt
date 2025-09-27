@@ -1,5 +1,9 @@
 package io.github.tmarsteel.hqrecorder.recording
 
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
+
+@Parcelize
 data class RecordingConfig(
     /** [android.media.AudioDeviceInfo.getAddress] of the target device */
     var deviceAddress: String,
@@ -16,7 +20,8 @@ data class RecordingConfig(
      */
     var encoding: Int,
     var tracks: List<InputTrackConfig>
-) {
+) : Parcelable {
+    @Parcelize
     data class InputTrackConfig(
         /**
          * must be unique among all tracks in [io.github.tmarsteel.hqrecorder.recording.RecordingConfig.tracks]
@@ -38,5 +43,5 @@ data class RecordingConfig(
          * The channel of the selected device to use for the right channel of this track.
          */
         var rightDeviceChannel: Channel?,
-    )
+    ) : Parcelable
 }
