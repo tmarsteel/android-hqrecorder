@@ -14,15 +14,15 @@ import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.core.content.getSystemService
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.lifecycleScope
 import io.github.tmarsteel.hqrecorder.R
 import io.github.tmarsteel.hqrecorder.databinding.FragmentSettingsBinding
+import io.github.tmarsteel.hqrecorder.recording.Channel
+import io.github.tmarsteel.hqrecorder.recording.RecordingConfig
 import io.github.tmarsteel.hqrecorder.ui.StringSpinnerAdapter
 import io.github.tmarsteel.hqrecorder.util.humanLabel
-import kotlinx.coroutines.launch
 import java.text.DecimalFormat
 
-class SettingsFragment : Fragment() {
+class SettingsFragment : Fragment(), TrackConfigAdapter.TrackConfigChangedListener {
 
     private var _binding: FragmentSettingsBinding? = null
 
@@ -33,6 +33,11 @@ class SettingsFragment : Fragment() {
     private var audioManager: AudioManager? = null
 
     private var selectedDeviceAddress: String? = null
+    private var selectedDeviceId: Int? = null
+
+    private lateinit var trackConfigAdapter: TrackConfigAdapter
+
+    private var recordingConfig = RecordingConfig("", 0, 44100, AudioFormat.ENCODING_PCM_16BIT, emptyList())
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -83,6 +88,7 @@ class SettingsFragment : Fragment() {
                     ?: return onNothingSelected(parent)
 
                 selectedDeviceAddress = device.address
+                selectedDeviceId = device.id
                 val samplingRatesAdapter = binding.settingsSamplingRateSpinner.adapter as ArrayAdapter<Int>
                 samplingRatesAdapter.clear()
                 samplingRatesAdapter.addAll(device.sampleRates.toList().sorted())
@@ -94,18 +100,58 @@ class SettingsFragment : Fragment() {
                     .sortedBy { it.ordinal }
                     .forEach { bitDepthsAdapter.add(it) }
 
-                Log.i(SettingsFragment::class.simpleName, "Device ${device.address} selected with sampling rates ${device.sampleRates.contentToString()} and encodings ${device.encodings.contentToString()}")
+                trackConfigAdapter.availableChannels = device.channelCounts.maxOrNull()?.toUInt() ?: 128u
+
+                Log.i(SettingsFragment::class.simpleName, "Device ${device.address} selected with ${device.channelCounts.maxOrNull()} channels, sampling rates ${device.sampleRates.contentToString()}, encodings ${device.encodings.contentToString()}")
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) {
                 selectedDeviceAddress = null
+                selectedDeviceId = null
             }
         }
 
         (binding.settingsAudioDeviceSpinner.adapter as ArrayAdapter<AudioDeviceInfo>).addAll(*audioManager!!.getDevices(AudioManager.GET_DEVICES_INPUTS))
         audioManager!!.registerAudioDeviceCallback(audioDeviceCallback, null)
 
+        binding.settingsAddMonoTrack.setOnClickListener(this::addMonoTrack)
+        binding.settingsAddStereoTrack.setOnClickListener(this::addStereoTrack)
+        trackConfigAdapter = TrackConfigAdapter(requireContext())
+        binding.settingsTracksList.adapter = trackConfigAdapter
+        trackConfigAdapter.clear()
+        trackConfigAdapter.addAll(recordingConfig.tracks)
+        trackConfigAdapter.trackConfigChangedListener = this
+
         return root
+    }
+
+    private val nextTrackId: Long get() = (recordingConfig.tracks.maxOfOrNull { it.id } ?: -1L) + 1
+
+    fun addMonoTrack(button: View?) {
+        val id = nextTrackId
+        val channel = recordingConfig.tracks.maxOfOrNull { it.leftOrMonoDeviceChannel.coerceAtLeast(it.rightDeviceChannel) } ?: Channel.FIRST
+        val track = RecordingConfig.InputTrackConfig(id, "Track ${id + 1}", channel, null)
+        recordingConfig.tracks = recordingConfig.tracks + track
+        trackConfigAdapter.add(track)
+    }
+
+    fun addStereoTrack(button: View?) {
+        val id = nextTrackId
+        val leftChannel = recordingConfig.tracks.maxOfOrNull { it.leftOrMonoDeviceChannel.coerceAtLeast(it.rightDeviceChannel) } ?: Channel.FIRST
+        val rightChannel = leftChannel.next()
+        val track = RecordingConfig.InputTrackConfig(id, "Track ${id + 1}", leftChannel, rightChannel)
+        recordingConfig.tracks = recordingConfig.tracks + track
+        trackConfigAdapter.add(track)
+    }
+
+    override fun onTrackConfigChanged(id: Long) {
+        // nothing to do, really
+    }
+
+    override fun onTrackDeleteRequested(id: Long) {
+        val track = recordingConfig.tracks.singleOrNull { it.id == id } ?: return
+        recordingConfig.tracks = recordingConfig.tracks - track
+        trackConfigAdapter.remove(track)
     }
 
     override fun onDestroyView() {

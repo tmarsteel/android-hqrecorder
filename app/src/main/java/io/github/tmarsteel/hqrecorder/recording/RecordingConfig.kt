@@ -2,41 +2,41 @@ package io.github.tmarsteel.hqrecorder.recording
 
 data class RecordingConfig(
     /** [android.media.AudioDeviceInfo.getAddress] of the target device */
-    val deviceAddress: String,
+    var deviceAddress: String,
     /** [android.media.AudioDeviceInfo.getId] of the target device */
-    val deviceId: String,
+    var deviceId: Int,
     /**
      * @see android.media.AudioFormat.getSampleRate
      * @see android.media.AudioRecord.getSampleRate
      * @see android.media.AudioDeviceInfo.getSampleRates
      */
-    val samplingRate: Int,
+    var samplingRate: Int,
     /**
      * @see android.media.AudioFormat.getEncoding
      */
-    val encoding: Int,
-    val tracks: List<InputTrackConfig>
+    var encoding: Int,
+    var tracks: List<InputTrackConfig>
 ) {
     data class InputTrackConfig(
         /**
          * must be unique among all tracks in [io.github.tmarsteel.hqrecorder.recording.RecordingConfig.tracks]
          */
-        val id: Long,
+        var id: Long,
 
         /**
          * human-readable label for this track, e.g. "guitar", "vocals", "basedrum", ...
          */
-        val label: String,
+        var label: String,
 
         /**
          * The channel of the selected device to use for the left channel of this track/
          * or as the single channel for mono recording.
          */
-        val leftOrMonoDeviceChannel: Int,
+        var leftOrMonoDeviceChannel: Channel,
 
         /**
          * The channel of the selected device to use for the right channel of this track.
          */
-        val rightDeviceChannel: Int?,
+        var rightDeviceChannel: Channel?,
     )
 }

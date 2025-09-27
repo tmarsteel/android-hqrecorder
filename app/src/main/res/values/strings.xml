@@ -13,6 +13,13 @@
     <string name="settings_sampling_rate">Sampling Rate</string>
     <string name="settings_bit_depth">Bit-Depth</string>
     <string name="settings_n_channels_before">utilize</string>
+    <string name="settings_tracks">Tracks</string>
+    <string name="settings_add_mono_track">Mono</string>
+    <string name="settings_add_stereo_track">Stereo</string>
+    <string name="settings_hint_track_label">Label</string>
+    <string name="settings_hint_track_delete">remove track</string>
+    <string name="settings_source_leftmono">Left/Mono Channel</string>
+    <string name="settings_source_right">Right Channel</string>
 
     <string name="error_no_audio_manager">Couldn\'t access the AudioManager API</string>
 </resources>
