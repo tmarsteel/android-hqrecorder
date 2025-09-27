@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.ComponentName
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
-import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.os.Bundle
@@ -21,11 +20,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import io.github.tmarsteel.hqrecorder.R
 import io.github.tmarsteel.hqrecorder.databinding.FragmentRecordBinding
-import io.github.tmarsteel.hqrecorder.util.any
+import io.github.tmarsteel.hqrecorder.util.FloatCollectors
 import io.github.tmarsteel.hqrecorder.util.minBufferSizeInBytes
+import io.github.tmarsteel.hqrecorder.util.stream
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.nio.ByteBuffer
+import kotlin.math.absoluteValue
 import kotlin.time.Duration.Companion.milliseconds
 
 class RecordFragment : Fragment() {
@@ -87,7 +88,7 @@ class RecordFragment : Fragment() {
         .build()
 
     fun startRecordingNextTake() {
-        binding.clipIndicatorCb.isChecked = false
+        binding.levelIndicator.clipIndicator = false
 
         val buffer = ByteBuffer.allocateDirect(audioFormat.frameSizeInBytes * audioFormat.sampleRate)
 
@@ -108,6 +109,7 @@ class RecordFragment : Fragment() {
                 .build()
         }
         audioRecord!!.startRecording()
+        binding.levelIndicator.reset()
 
         lifecycleScope.launch {
             Log.i(TAG, "Starting take")
@@ -116,15 +118,13 @@ class RecordFragment : Fragment() {
                 val readResult = audioRecord!!.read(buffer, buffer.capacity(), AudioRecord.READ_NON_BLOCKING)
                 check(readResult >= 0)
                 buffer.limit(readResult)
-                Log.i(TAG, "got ${buffer.limit()} (of ${buffer.capacity()}) bytes of audio data (${(buffer.limit().toFloat() / buffer.capacity().toFloat() * 1000).toInt().milliseconds})")
                 val asFloatBuffer = buffer.asFloatBuffer()
-                asFloatBuffer.flip()
-                val hasClipped = asFloatBuffer.any { sample -> sample == Float.MAX_VALUE || sample == Float.MIN_VALUE }
-                binding.clipIndicatorCb.isChecked = binding.clipIndicatorCb.isChecked || hasClipped
+                val maxSample = asFloatBuffer.stream().map { it.absoluteValue }.collect(FloatCollectors.MAXING)
+                binding.levelIndicator.update(maxSample)
 
                 if (buffer.limit() < buffer.capacity()) {
                     // temporarily exhausted all audio data
-                    delay(500.milliseconds)
+                    delay(100.milliseconds)
                 }
             }
             Log.i(TAG, "Take ended")

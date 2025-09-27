@@ -14,6 +14,7 @@ import android.widget.TextView
 import io.github.tmarsteel.hqrecorder.R
 import io.github.tmarsteel.hqrecorder.recording.Channel
 import io.github.tmarsteel.hqrecorder.recording.RecordingConfig
+import io.github.tmarsteel.hqrecorder.ui.SignalLevelIndicatorView
 
 class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputTrackConfig>(context, R.layout.view_settings_track_config, R.id.settings_track_label) {
     var availableChannels: UInt = 1u
@@ -48,12 +49,21 @@ class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
         leftSourceSpinnerAdapter.availableChannels = availableChannels
         leftSourceSpinner.setSelection((item.leftOrMonoDeviceChannel.number - 1u).toInt())
         leftSourceSpinner.onItemSelectedListener = SourceChannelChangeListener(item.id, LEFT_DEFAULT_CHANNEL, item::leftOrMonoDeviceChannel::set)
+        val leftLevel = view.findViewById<SignalLevelIndicatorView>(R.id.settings_track_signal_level_left)
+        leftLevel.channelIndicator = if (item.rightDeviceChannel != null) "L" else ""
 
+        val rightGroup = view.findViewById<View>(R.id.settings_track_right_source_group)
         val rightSourceSpinner = view.findViewById<Spinner>(R.id.settings_track_right_source_spinner)
+        val rightLevel = view.findViewById<SignalLevelIndicatorView>(R.id.settings_track_signal_level_right)
         if (item.rightDeviceChannel == null) {
             rightSourceSpinner.onItemSelectedListener = null
-            view.findViewById<View>(R.id.settings_track_right_source_group).visibility = View.INVISIBLE
+            rightGroup.visibility = View.INVISIBLE
+            rightLevel.visibility = View.INVISIBLE
         } else {
+            rightGroup.visibility = View.VISIBLE
+            rightLevel.visibility = View.VISIBLE
+            rightLevel.channelIndicator = "R"
+
             val rightSourceSpinnerAdapter = rightSourceSpinner.adapter as? SourceChannelAdapter ?: run {
                 val adapter = SourceChannelAdapter(parent.context)
                 rightSourceSpinner.adapter = adapter

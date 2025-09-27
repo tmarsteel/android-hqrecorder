@@ -4,6 +4,17 @@ import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioRecord
 import java.nio.FloatBuffer
+import java.text.DecimalFormat
+import java.util.concurrent.atomic.AtomicReference
+import java.util.function.BiConsumer
+import java.util.function.BinaryOperator
+import java.util.function.Function
+import java.util.function.Supplier
+import java.util.stream.Collector
+import java.util.stream.Stream
+import java.util.stream.StreamSupport
+import kotlin.math.absoluteValue
+import kotlin.math.log10
 
 val AudioFormat.minBufferSizeInBytes: Int get()= AudioRecord.getMinBufferSize(sampleRate, channelMask, encoding)
 
@@ -16,20 +27,37 @@ fun <R> FloatBuffer.fold(initial: R, accumulate: (R, Float) -> R): R {
     return result
 }
 
-fun FloatBuffer.any(predicate: (Float) -> Boolean): Boolean {
-    val initialPosition = position()
-    val initialLimit = limit()
-    var result = false
-    while (hasRemaining()) {
-        if (predicate(get())) {
-            result = true
-            break
+fun FloatBuffer.stream(): Stream<Float> {
+    return StreamSupport.stream(FloatBufferSpliterator(this, position(), limit()), false)
+}
+
+fun accumulatingFloat(combiner: (Float, Float) -> Float): Collector<Float, *, Float> = object : Collector<Float, AtomicReference<Float?>, Float> {
+    override fun accumulator(): BiConsumer<AtomicReference<Float?>, Float> = BiConsumer { acc, v ->
+        val accV = acc.getPlain()
+        if (accV == null) {
+            acc.setPlain(v)
+        } else {
+            acc.setPlain(combiner(accV, v))
         }
     }
 
-    position(initialPosition)
-    limit(initialLimit)
-    return result
+    override fun characteristics(): Set<Collector.Characteristics> =setOf(Collector.Characteristics.CONCURRENT, Collector.Characteristics.UNORDERED)
+
+    override fun combiner(): BinaryOperator<AtomicReference<Float?>> = BinaryOperator { a, b ->
+        val aV = a.getPlain()
+        val bV = a.getPlain()
+        if (aV == null || bV == null) b else {
+            AtomicReference(combiner(aV, bV))
+        }
+    }
+
+    override fun finisher(): Function<AtomicReference<Float?>, Float> = Function { acc -> acc.getPlain() ?: 0.0f }
+    override fun supplier(): Supplier<AtomicReference<Float?>> = Supplier { AtomicReference<Float?>(null) }
+}
+
+data object FloatCollectors {
+    val AVERAGING = accumulatingFloat { a, b -> a / 2.0f + b / 2.0f }
+    val MAXING = accumulatingFloat { a, b -> a.coerceAtLeast(b) }
 }
 
 val AudioDeviceInfo.humanLabel: String get() {
@@ -66,4 +94,21 @@ val AudioDeviceInfo.humanLabel: String get() {
     }
     val channelsStr = channelCounts.maxOrNull()?.let { "$it channel(s)" } ?: "unlimited channels"
     return "$productName${typeAndOrAddressStr}, $channelsStr"
+}
+
+private val decibelNumberFormat = (DecimalFormat.getNumberInstance() as DecimalFormat).also {
+    it.applyPattern("#.#dB")
+}
+fun getSampleLevelAsDecibelText(sample: Float): String {
+    val absSample = sample.absoluteValue
+    if (absSample <= 0.0f) {
+        return "-inf"
+    }
+    if (absSample == Float.MAX_VALUE) {
+        return "-0dB"
+    }
+
+    val level = log10(absSample.toDouble() / Float.MAX_VALUE.toDouble()) * 10.0
+    return decibelNumberFormat.format(level)
+    // 3.3525738E38
 }

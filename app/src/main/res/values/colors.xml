@@ -7,4 +7,7 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <color name="signal_level_background">#FFCCCCCC</color>
+    <color name="signal_level_db_background">#FF2A2A2A</color>
+    <color name="signal_level_db_background_clipped">#FFFF0000</color>
 </resources>
