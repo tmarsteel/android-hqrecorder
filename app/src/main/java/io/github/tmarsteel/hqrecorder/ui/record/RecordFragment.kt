@@ -17,17 +17,14 @@ import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.lifecycleScope
 import io.github.tmarsteel.hqrecorder.R
 import io.github.tmarsteel.hqrecorder.databinding.FragmentRecordBinding
-import io.github.tmarsteel.hqrecorder.util.FloatCollectors
+import io.github.tmarsteel.hqrecorder.recording.Channel
+import io.github.tmarsteel.hqrecorder.recording.RecordingConfig
+import io.github.tmarsteel.hqrecorder.recording.TakeRecorderRunnable
+import io.github.tmarsteel.hqrecorder.util.bytesPerSecond
 import io.github.tmarsteel.hqrecorder.util.minBufferSizeInBytes
-import io.github.tmarsteel.hqrecorder.util.stream
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import java.nio.ByteBuffer
-import kotlin.math.absoluteValue
-import kotlin.time.Duration.Companion.milliseconds
 
 class RecordFragment : Fragment() {
 
@@ -87,7 +84,10 @@ class RecordFragment : Fragment() {
         .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
         .build()
 
+    private var recorderRunnable: TakeRecorderRunnable? = null
+
     fun startRecordingNextTake() {
+        recorderRunnable?.stop()
         binding.levelIndicator.clipIndicator = false
 
         val buffer = ByteBuffer.allocateDirect(audioFormat.frameSizeInBytes * audioFormat.sampleRate)
@@ -111,27 +111,17 @@ class RecordFragment : Fragment() {
         audioRecord!!.startRecording()
         binding.levelIndicator.reset()
 
-        lifecycleScope.launch {
-            Log.i(TAG, "Starting take")
-            while (audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-                buffer.clear()
-                val readResult = audioRecord!!.read(buffer, buffer.capacity(), AudioRecord.READ_NON_BLOCKING)
-                check(readResult >= 0)
-                buffer.limit(readResult)
-                val asFloatBuffer = buffer.asFloatBuffer()
-                val maxSample = asFloatBuffer.stream().map { it.absoluteValue }.collect(FloatCollectors.MAXING)
-                binding.levelIndicator.update(maxSample)
-
-                if (buffer.limit() < buffer.capacity()) {
-                    // temporarily exhausted all audio data
-                    delay(100.milliseconds)
-                }
-            }
-            Log.i(TAG, "Take ended")
-        }
+        recorderRunnable = TakeRecorderRunnable(
+            requireContext(),
+            listOf(RecordingConfig.InputTrackConfig(1, "Test", Channel(1u), null)),
+            audioRecord!!,
+            ByteBuffer.allocateDirect(audioFormat.bytesPerSecond)
+        )
+        Thread(recorderRunnable!!).start()
     }
 
     private fun stopRecording() {
+        recorderRunnable?.stop()
         audioRecord?.stop()
     }
 

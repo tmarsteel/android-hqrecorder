@@ -17,6 +17,7 @@ import kotlin.math.absoluteValue
 import kotlin.math.log10
 
 val AudioFormat.minBufferSizeInBytes: Int get()= AudioRecord.getMinBufferSize(sampleRate, channelMask, encoding)
+val AudioFormat.bytesPerSecond: Int get() = frameSizeInBytes * sampleRate
 
 fun <R> FloatBuffer.fold(initial: R, accumulate: (R, Float) -> R): R {
     var result = initial

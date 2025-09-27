@@ -1,0 +1,107 @@
+package io.github.tmarsteel.hqrecorder.recording
+
+import android.media.AudioFormat
+import java.io.FileOutputStream
+import java.io.OutputStream
+import java.io.RandomAccessFile
+import java.lang.AutoCloseable
+import java.nio.ByteBuffer
+
+class WavFileWriter(
+    val outputStream: RandomAccessFile,
+    val stereo: Boolean,
+    val audioFormat: AudioFormat,
+) : AutoCloseable {
+    init {
+        require(audioFormat.encoding in WAV_FORMAT_TAG_BY_ANDROID_FORMAT) {
+            "The given encoding (${audioFormat.encoding}) is not supported by WAV"
+        }
+    }
+    private var preambleWritten = false
+
+    fun assurePreamble() {
+        check(!closed)
+        if (preambleWritten) {
+            return
+        }
+        preambleWritten = true
+
+        val bitsPerSample = BITS_PER_SAMPLE.getValue(audioFormat.encoding)
+        val blockAlign = ((bitsPerSample + 7u) / 8u).toUShort()
+
+        outputStream.write("RIFF\u0000\u0000\u0000\u0000WAVEfmt \u0010\u0000\u0000\u0000".toByteArray(Charsets.US_ASCII))
+        outputStream.writeLE(WAV_FORMAT_TAG_BY_ANDROID_FORMAT.getValue(audioFormat.encoding))
+        outputStream.writeLE((if (stereo) 2 else 1).toUShort())
+        outputStream.writeLE(audioFormat.sampleRate)
+        outputStream.writeLE(audioFormat.sampleRate * blockAlign.toInt())
+        outputStream.writeLE(blockAlign)
+        outputStream.writeLE(bitsPerSample)
+        outputStream.write("data\u0000\u0000\u0000\u0000".toByteArray(Charsets.US_ASCII))
+    }
+
+    /**
+     * Writes the given data to the file, depleting [data]. The data must be in the format
+     * as given in [encoding] and respect [stereo].
+     */
+    fun writeSampleData(data: ByteBuffer) {
+        assurePreamble()
+        if (!data.hasArray()) {
+            TODO()
+        }
+        outputStream.write(data.array(), data.arrayOffset() + data.position(), data.limit())
+        data.position(data.limit())
+    }
+
+    private var closed = false
+    override fun close() {
+        check(!closed)
+        closed = true
+        val fileSize = outputStream.length()
+        outputStream.seek(0x04)
+        outputStream.writeLE(fileSize.toInt() - 8)
+        outputStream.seek(0x28)
+        outputStream.writeLE(fileSize.toInt() - 44)
+        outputStream.close()
+    }
+
+    private companion object {
+        val WAV_FORMAT_TAG_BY_ANDROID_FORMAT: Map<Int, UShort> = mapOf(
+            AudioFormat.ENCODING_PCM_8BIT to 0x0001u,
+            AudioFormat.ENCODING_PCM_16BIT to 0x0001u,
+            AudioFormat.ENCODING_PCM_24BIT_PACKED to 0x0001u,
+            AudioFormat.ENCODING_PCM_FLOAT to 0x0003u,
+        )
+
+        val BITS_PER_SAMPLE: Map<Int, UShort> = mapOf(
+            AudioFormat.ENCODING_PCM_8BIT to 8u,
+            AudioFormat.ENCODING_PCM_16BIT to 16u,
+            AudioFormat.ENCODING_PCM_24BIT_PACKED to 24u,
+            AudioFormat.ENCODING_PCM_32BIT to 32u,
+            AudioFormat.ENCODING_PCM_FLOAT to 32u,
+        )
+    }
+}
+
+private fun OutputStream.writeLE(value: UShort) {
+    write(value.toInt() and 0xFF)
+    write(value.toInt() shr 8)
+}
+
+private fun OutputStream.writeLE(value: Int) {
+    write(value and 0xFF)
+    write((value shr 8) and 0xFF)
+    write((value shr 16) and 0xFF)
+    write((value shr 24) and 0xFF)
+}
+
+private fun RandomAccessFile.writeLE(value: UShort) {
+    write(value.toInt() and 0xFF)
+    write(value.toInt() shr 8)
+}
+
+private fun RandomAccessFile.writeLE(value: Int) {
+    write(value and 0xFF)
+    write((value shr 8) and 0xFF)
+    write((value shr 16) and 0xFF)
+    write((value shr 24) and 0xFF)
+}
