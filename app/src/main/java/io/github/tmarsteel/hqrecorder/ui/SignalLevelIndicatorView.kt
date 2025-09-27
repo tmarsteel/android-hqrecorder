@@ -13,9 +13,10 @@ import io.github.tmarsteel.hqrecorder.util.getSampleLevelAsDecibelText
 import kotlin.math.absoluteValue
 
 class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
-    private lateinit var measuredTextChannelIndicator: MeasuredText
-    private lateinit var measuredTextPeakSignalLevel: MeasuredText
-    private lateinit var peakSignalLevelText: String
+    private var measuredTextChannelIndicator: MeasuredText = MeasuredText.Builder(charArrayOf())
+        .build()
+    private var measuredTextPeakSignalLevel: MeasuredText = measuredTextChannelIndicator
+    private var peakSignalLevelText: String = getSampleLevelAsDecibelText(0.0f)
 
     var channelIndicator: String = "L"
         set(value) {
@@ -105,7 +106,6 @@ class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : 
         channelIndicator = channelIndicator
         clipIndicator = clipIndicator
     }
-
 
     override fun onDraw(canvas: Canvas) {
         canvas.drawPaint(paintBackground)
