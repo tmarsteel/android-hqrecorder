@@ -18,6 +18,7 @@ import androidx.lifecycle.lifecycleScope
 import io.github.tmarsteel.hqrecorder.R
 import io.github.tmarsteel.hqrecorder.databinding.FragmentSettingsBinding
 import io.github.tmarsteel.hqrecorder.ui.StringSpinnerAdapter
+import io.github.tmarsteel.hqrecorder.util.humanLabel
 import kotlinx.coroutines.launch
 import java.text.DecimalFormat
 
@@ -43,7 +44,7 @@ class SettingsFragment : Fragment() {
 
         binding.settingsAudioDeviceSpinner.adapter = StringSpinnerAdapter<AudioDeviceInfo>(
             context = requireContext(),
-            labelGetter = { "${it.productName} (${it.address})" },
+            labelGetter = AudioDeviceInfo::humanLabel,
             idMapper = { _, d -> d.id.toLong() },
         )
         binding.settingsSamplingRateSpinner.adapter = StringSpinnerAdapter<Int>(

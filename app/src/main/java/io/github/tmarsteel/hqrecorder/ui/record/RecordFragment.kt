@@ -1,10 +1,15 @@
-package io.github.tmarsteel.hqrecorder.ui.home
+package io.github.tmarsteel.hqrecorder.ui.record
 
 import android.Manifest
+import android.content.ComponentName
+import android.content.ServiceConnection
 import android.content.pm.PackageManager
+import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.os.Bundle
+import android.os.IBinder
+import android.os.Messenger
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -30,6 +35,22 @@ class RecordFragment : Fragment() {
     // This property is only valid between onCreateView and
     // onDestroyView.
     private val binding get() = _binding!!
+
+    private var recordingServiceMessenger: Messenger? = null
+    private val recordingServiceConnection = object : ServiceConnection {
+        override fun onServiceConnected(
+            name: ComponentName?,
+            service: IBinder?
+        ) {
+            service?.let {
+                recordingServiceMessenger = Messenger(it)
+            }
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            recordingServiceMessenger = null
+        }
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -104,7 +125,6 @@ class RecordFragment : Fragment() {
                 if (buffer.limit() < buffer.capacity()) {
                     // temporarily exhausted all audio data
                     delay(500.milliseconds)
-                    logMetrics()
                 }
             }
             Log.i(TAG, "Take ended")
@@ -113,16 +133,6 @@ class RecordFragment : Fragment() {
 
     private fun stopRecording() {
         audioRecord?.stop()
-    }
-
-    private fun logMetrics() {
-        val m = audioRecord?.metrics ?: return
-        val encoding  = m.getString(AudioRecord.MetricsConstants.ENCODING)
-        val sampleRate = m.getInt(AudioRecord.MetricsConstants.SAMPLERATE)
-        val channels = m.getInt(AudioRecord.MetricsConstants.CHANNELS)
-        val source = m.getString(AudioRecord.MetricsConstants.SOURCE)
-        val latency = m.getInt(AudioRecord.MetricsConstants.LATENCY)
-        Log.i(TAG, "encoding = $encoding, sampleRate = $sampleRate, channels = $channels, source 0 $source, latency = $latency")
     }
 
     override fun onRequestPermissionsResult(

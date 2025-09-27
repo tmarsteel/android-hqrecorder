@@ -1,4 +1,4 @@
-package io.github.tmarsteel.hqrecorder.ui.home
+package io.github.tmarsteel.hqrecorder.ui.record
 
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
