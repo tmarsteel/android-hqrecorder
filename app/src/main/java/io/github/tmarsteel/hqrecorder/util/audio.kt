@@ -58,5 +58,12 @@ val AudioDeviceInfo.humanLabel: String get() {
         AudioDeviceInfo.TYPE_BUS -> "other external"
         else -> null
     }
-    return "$productName (${typeStr ?: address})"
+    val typeAndOrAddressStr = when {
+        typeStr == null && address.isEmpty() -> ""
+        typeStr == null -> " ($address)"
+        address.isEmpty() -> " ($typeStr)"
+        else -> " ($typeStr $address)"
+    }
+    val channelsStr = channelCounts.maxOrNull()?.let { "$it channel(s)" } ?: "unlimited channels"
+    return "$productName${typeAndOrAddressStr}, $channelsStr"
 }
