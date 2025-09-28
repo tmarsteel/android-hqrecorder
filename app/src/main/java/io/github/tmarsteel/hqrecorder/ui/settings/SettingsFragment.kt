@@ -17,6 +17,7 @@ import androidx.fragment.app.Fragment
 import io.github.tmarsteel.hqrecorder.R
 import io.github.tmarsteel.hqrecorder.databinding.FragmentSettingsBinding
 import io.github.tmarsteel.hqrecorder.recording.Channel
+import io.github.tmarsteel.hqrecorder.recording.ChannelMask
 import io.github.tmarsteel.hqrecorder.recording.RecordingConfig
 import io.github.tmarsteel.hqrecorder.ui.StringSpinnerAdapter
 import io.github.tmarsteel.hqrecorder.util.humanLabel
@@ -47,10 +48,9 @@ class SettingsFragment : Fragment(), TrackConfigAdapter.TrackConfigChangedListen
         _binding = FragmentSettingsBinding.inflate(inflater, container, false)
         val root: View = binding.root
 
-        binding.settingsAudioDeviceSpinner.adapter = StringSpinnerAdapter<AudioDeviceInfo>(
+        binding.settingsAudioDeviceSpinner.adapter = StringSpinnerAdapter<AudioDeviceWithChannelMask>(
             context = requireContext(),
-            labelGetter = AudioDeviceInfo::humanLabel,
-            idMapper = { _, d -> d.id.toLong() },
+            idMapper = { _, d -> d.combinedId },
         )
         binding.settingsSamplingRateSpinner.adapter = StringSpinnerAdapter<Int>(
             context = requireContext(),
@@ -111,7 +111,7 @@ class SettingsFragment : Fragment(), TrackConfigAdapter.TrackConfigChangedListen
             }
         }
 
-        (binding.settingsAudioDeviceSpinner.adapter as ArrayAdapter<AudioDeviceInfo>).addAll(*audioManager!!.getDevices(AudioManager.GET_DEVICES_INPUTS))
+        audioDeviceCallback.onAudioDevicesAdded(audioManager!!.getDevices(AudioManager.GET_DEVICES_INPUTS))
         audioManager!!.registerAudioDeviceCallback(audioDeviceCallback, null)
 
         binding.settingsAddMonoTrack.setOnClickListener(this::addMonoTrack)
@@ -163,19 +163,27 @@ class SettingsFragment : Fragment(), TrackConfigAdapter.TrackConfigChangedListen
     private val audioDeviceCallback = object : AudioDeviceCallback() {
         override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) {
             val binding = _binding ?: return
-            addedDevices.forEach {
-                if (!it.isSource) {
+            val adapter = binding.settingsAudioDeviceSpinner.adapter as ArrayAdapter<AudioDeviceWithChannelMask>
+            addedDevices.forEach { newDevice ->
+                if (!newDevice.isSource) {
                     return
                 }
-                (binding.settingsAudioDeviceSpinner.adapter as ArrayAdapter<AudioDeviceInfo>).add(it)
+                for (channelMask in ChannelMask.getUniqueMasksFor(newDevice)) {
+                    adapter.add(AudioDeviceWithChannelMask(newDevice, channelMask))
+                }
             }
+            adapter.sort(AudioDeviceWithChannelMask::compareTo)
         }
 
         override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) {
             val binding = _binding ?: return
-            removedDevices.forEach {
-                (binding.settingsAudioDeviceSpinner.adapter as ArrayAdapter<AudioDeviceInfo>).remove(it)
-            }
+            val adapter = (binding.settingsAudioDeviceSpinner.adapter as ArrayAdapter<AudioDeviceWithChannelMask>)
+            val removedDeviceIds = removedDevices.map { it.id }.toSet()
+            (0 until adapter.count)
+                .asSequence()
+                .mapNotNull(adapter::getItem)
+                .filter { it.device.id in removedDeviceIds }
+                .forEach(adapter::remove)
         }
     }
 

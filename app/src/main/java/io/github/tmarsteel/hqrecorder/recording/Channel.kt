@@ -6,10 +6,10 @@ import kotlinx.parcelize.Parcelize
 
 @Parcelize
 @JvmInline
-value class Channel(val number: UInt) : Comparable<Channel>, Parcelable {
+value class Channel(val number: Int) : Comparable<Channel>, Parcelable {
     init {
-        assert(number > 0u) {
-            "Channels start at 1!"
+        assert(number in 1..32) {
+            "Channels numbers must be in the range [1; 32]"
         }
     }
 
@@ -18,18 +18,26 @@ value class Channel(val number: UInt) : Comparable<Channel>, Parcelable {
     }
 
     fun coerceAtLeast(other: Channel?): Channel {
-        return Channel(number.coerceAtLeast(other?.number ?: 0u))
+        return Channel(number.coerceAtLeast(other?.number ?: 0))
     }
 
     fun next(): Channel {
-        return Channel(number + 1u)
+        return Channel(number + 1)
     }
 
-    val maskForChannel: Int get()= 1 shr number.toInt()
+    override fun toString(): String = number.toString()
+
+    val maskForChannel: Int get()= 1 shl number
 
     companion object {
-        val FIRST = Channel(1u)
-        val SECOND = Channel(2u)
+        val FIRST = Channel(1)
+        val SECOND = Channel(2)
+
+        val all: Sequence<Channel> = sequence {
+            for (bit in 0..31) {
+                yield(Channel(bit + 1))
+            }
+        }
 
         /**
          * Builds a value of the format as [android.media.AudioFormat.getChannelIndexMask].
@@ -55,8 +63,8 @@ value class Channel(val number: UInt) : Comparable<Channel>, Parcelable {
             var index = 0
             var channel = FIRST
             val map = HashMap<Channel, Int>()
-            while (channel.number <= 32u) {
-                if (indexMask and channel.maskForChannel != 0) {
+            while (channel.number <= 32) {
+                if ((indexMask and channel.maskForChannel) != 0) {
                     map[channel] = index
                     index++
                 }

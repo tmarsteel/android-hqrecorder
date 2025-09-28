@@ -113,7 +113,7 @@ class RecordFragment : Fragment() {
 
         recorderRunnable = TakeRecorderRunnable(
             requireContext(),
-            listOf(RecordingConfig.InputTrackConfig(1, "Test", Channel(1u), null)),
+            listOf(RecordingConfig.InputTrackConfig(1, "Test", Channel(1), null)),
             audioRecord!!,
             ByteBuffer.allocateDirect(audioFormat.bytesPerSecond)
         )

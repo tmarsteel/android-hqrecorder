@@ -289,7 +289,7 @@ class RecordingService : Service() {
                 return false
             }
 
-            val maxAvailableChannel = Channel(device.channelCounts.max().toUInt())
+            val maxAvailableChannel = Channel(device.channelCounts.max())
             val maxRequestedChannel = config.tracks.maxOfOrNull { it.leftOrMonoDeviceChannel.coerceAtLeast(it.rightDeviceChannel) }
             if (maxRequestedChannel == null || maxRequestedChannel > maxAvailableChannel) {
                 return false

@@ -3,6 +3,7 @@ package io.github.tmarsteel.hqrecorder.util
 import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioRecord
+import io.github.tmarsteel.hqrecorder.ui.settings.AudioDeviceWithChannelMask
 import java.nio.FloatBuffer
 import java.text.DecimalFormat
 import java.util.concurrent.atomic.AtomicReference
@@ -93,8 +94,7 @@ val AudioDeviceInfo.humanLabel: String get() {
         address.isEmpty() -> " ($typeStr)"
         else -> " ($typeStr $address)"
     }
-    val channelsStr = channelCounts.maxOrNull()?.let { "$it channel(s)" } ?: "unlimited channels"
-    return "$productName${typeAndOrAddressStr}, $channelsStr"
+    return "$productName${typeAndOrAddressStr}"
 }
 
 private val decibelNumberFormat = (DecimalFormat.getNumberInstance() as DecimalFormat).also {

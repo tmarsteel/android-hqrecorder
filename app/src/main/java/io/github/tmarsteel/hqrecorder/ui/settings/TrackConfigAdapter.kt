@@ -47,7 +47,7 @@ class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
             adapter
         }
         leftSourceSpinnerAdapter.availableChannels = availableChannels
-        leftSourceSpinner.setSelection((item.leftOrMonoDeviceChannel.number - 1u).toInt())
+        leftSourceSpinner.setSelection((item.leftOrMonoDeviceChannel.number - 1).toInt())
         leftSourceSpinner.onItemSelectedListener = SourceChannelChangeListener(item.id, LEFT_DEFAULT_CHANNEL, item::leftOrMonoDeviceChannel::set)
         val leftLevel = view.findViewById<SignalLevelIndicatorView>(R.id.settings_track_signal_level_left)
         leftLevel.channelIndicator = if (item.rightDeviceChannel != null) "L" else ""
@@ -70,7 +70,7 @@ class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
                 adapter
             }
             rightSourceSpinnerAdapter.availableChannels = availableChannels
-            rightSourceSpinner.setSelection(((item.rightDeviceChannel ?: Channel.SECOND).number - 1u).toInt())
+            rightSourceSpinner.setSelection(((item.rightDeviceChannel ?: Channel.SECOND).number - 1))
             rightSourceSpinner.onItemSelectedListener = SourceChannelChangeListener(item.id, RIGHT_DEFAULT_CHANNEL, item::leftOrMonoDeviceChannel::set)
         }
 
@@ -132,7 +132,7 @@ class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
             position: Int,
             id: Long
         ) {
-            updateTarget(Channel(position.toUInt() + 1u))
+            updateTarget(Channel(position + 1))
             trackConfigChangedListener?.onTrackConfigChanged(trackId)
         }
 
