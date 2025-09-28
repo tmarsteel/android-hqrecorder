@@ -118,7 +118,6 @@ class RecordFragment : Fragment() {
             listOf(RecordingConfig.InputTrackConfig(1, "Test", channelMask.channels.single(), null)),
             channelMask,
             audioRecord!!,
-            ByteBuffer.allocateDirect(audioFormat.bytesPerSecond)
         )
         Thread(recorderRunnable!!).start()
     }

@@ -7,6 +7,7 @@ import android.media.AudioRecord
 import android.net.Uri
 import android.provider.MediaStore
 import android.util.Log
+import io.github.tmarsteel.hqrecorder.recording.TakeRecorderRunnable.Companion.SAMPLE_SIZE_IN_BYTES_BY_ENCODING
 import java.io.Closeable
 import java.io.File
 import java.io.FileInputStream
@@ -26,7 +27,7 @@ class TakeRecorderRunnable(
     val tracks: List<RecordingConfig.InputTrackConfig>,
     val channelMask: ChannelMask,
     val audioRecord: AudioRecord,
-    val buffer: ByteBuffer,
+    val buffer: ByteBuffer = ByteBuffer.allocateDirect(audioRecord.format.frameSizeInBytes * audioRecord.format.sampleRate),
 ) : Runnable {
     private var stopSignal = AtomicBoolean(false)
 
@@ -51,6 +52,7 @@ class TakeRecorderRunnable(
             ?: throw RuntimeException("Unsupported recording ${audioRecord.format.encoding}, shouldn't have been queued.")
         val trackStates = initializeTrackRecordingStates()
 
+        Log.i(javaClass.name, "Starting take")
         try {
             while (!stopSignal.getAcquire()) {
                 buffer.clear()
@@ -71,9 +73,12 @@ class TakeRecorderRunnable(
                         }
                         if (buffer.position() + frameSizeInBytes < buffer.limit()) {
                             buffer.position(buffer.position() + frameSizeInBytes)
+                        } else {
+                            break
                         }
                     }
                 }
+                Log.d(javaClass.name, "Wrote $timeInBuffer of audio in $timeSpentWriting")
 
                 Thread.sleep(50)
             }
@@ -166,16 +171,16 @@ class TakeRecorderRunnable(
 
         /**
          * Given a buffer that points to the start of a frame where a single sample is [sampleSizeInBytes] long,
-         * writes the bytes that correspond to the sample with index [sampleIndexInFrame] to [target], starting at index [off].
+         * writes the bytes that correspond to the sample with index [sampleIndexInFrame] to [dst], starting at index [dstOff].
          * @param sampleSizeInBytes see [AudioFormat.getEncoding] and [SAMPLE_SIZE_IN_BYTES_BY_ENCODING]
-         * @param target should be 4 bytes of size to be able to accommodate all encodings
+         * @param dst should be 4 bytes of size to be able to accommodate all encodings
          */
         private fun extractSampleBytes(
             compoundFrame: ByteBuffer,
             sampleSizeInBytes: Int,
             sampleIndexInFrame: Int,
-            target: ByteArray,
-            off: Int,
+            dst: ByteArray,
+            dstOff: Int,
         ) {
             val indexOfFirst = sampleIndexInFrame * sampleSizeInBytes
             val indexOfLast = indexOfFirst + sampleSizeInBytes - 1
@@ -183,7 +188,9 @@ class TakeRecorderRunnable(
                 throw BufferUnderflowException()
             }
 
-            compoundFrame.get(target, off + indexOfFirst, sampleSizeInBytes)
+            for (byteIndex in 0 until sampleSizeInBytes) {
+                dst[dstOff + byteIndex] = compoundFrame.get(compoundFrame.position() + indexOfFirst + byteIndex)
+            }
         }
 
         override fun close() {
@@ -200,6 +207,7 @@ class TakeRecorderRunnable(
                 },
                 null
             )
+            Log.i(javaClass.name, "Copied ${writer.targetFile.absolutePath} to $mediaUri (${writer.targetFile.length()} bytes)")
             writer.targetFile.delete()
         }
     }
