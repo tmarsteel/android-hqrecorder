@@ -13,11 +13,12 @@ import android.widget.Spinner
 import android.widget.TextView
 import io.github.tmarsteel.hqrecorder.R
 import io.github.tmarsteel.hqrecorder.recording.Channel
+import io.github.tmarsteel.hqrecorder.recording.ChannelMask
 import io.github.tmarsteel.hqrecorder.recording.RecordingConfig
 import io.github.tmarsteel.hqrecorder.ui.SignalLevelIndicatorView
 
 class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputTrackConfig>(context, R.layout.view_settings_track_config, R.id.settings_track_label) {
-    var availableChannels: UInt = 1u
+    var channelMask: ChannelMask = ChannelMask.EMPTY
         set(value) {
             field = value
             notifyDataSetChanged()
@@ -41,13 +42,11 @@ class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
         }
 
         val leftSourceSpinner = view.findViewById<Spinner>(R.id.settings_track_left_source_spinner)
-        val leftSourceSpinnerAdapter = leftSourceSpinner.adapter as? SourceChannelAdapter ?: run {
+        leftSourceSpinner.adapter as? SourceChannelAdapter ?: run {
             val adapter = SourceChannelAdapter(parent.context)
             leftSourceSpinner.adapter = adapter
-            adapter
         }
-        leftSourceSpinnerAdapter.availableChannels = availableChannels
-        leftSourceSpinner.setSelection((item.leftOrMonoDeviceChannel.number - 1).toInt())
+        leftSourceSpinner.setSelection(channelMask.channels.indexOf(item.leftOrMonoDeviceChannel))
         leftSourceSpinner.onItemSelectedListener = SourceChannelChangeListener(item.id, LEFT_DEFAULT_CHANNEL, item::leftOrMonoDeviceChannel::set)
         val leftLevel = view.findViewById<SignalLevelIndicatorView>(R.id.settings_track_signal_level_left)
         leftLevel.channelIndicator = if (item.rightDeviceChannel != null) "L" else ""
@@ -64,13 +63,11 @@ class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
             rightLevel.visibility = View.VISIBLE
             rightLevel.channelIndicator = "R"
 
-            val rightSourceSpinnerAdapter = rightSourceSpinner.adapter as? SourceChannelAdapter ?: run {
+            rightSourceSpinner.adapter as? SourceChannelAdapter ?: run {
                 val adapter = SourceChannelAdapter(parent.context)
                 rightSourceSpinner.adapter = adapter
-                adapter
             }
-            rightSourceSpinnerAdapter.availableChannels = availableChannels
-            rightSourceSpinner.setSelection(((item.rightDeviceChannel ?: Channel.SECOND).number - 1))
+            rightSourceSpinner.setSelection(channelMask.channels.indexOf(item.rightDeviceChannel!!))
             rightSourceSpinner.onItemSelectedListener = SourceChannelChangeListener(item.id, RIGHT_DEFAULT_CHANNEL, item::leftOrMonoDeviceChannel::set)
         }
 
@@ -81,21 +78,15 @@ class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
         return view
     }
 
-    class SourceChannelAdapter(private val context: Context) : BaseAdapter() {
+    private inner class SourceChannelAdapter(private val context: Context) : BaseAdapter() {
         private val layoutInflater = LayoutInflater.from(context)
 
-        var availableChannels: UInt = 1u
-            set(value) {
-                field = value
-                notifyDataSetChanged()
-            }
-
         override fun getCount(): Int {
-            return availableChannels.toInt()
+            return channelMask.count
         }
 
-        override fun getItem(position: Int): Any? {
-            return position.takeIf { it.toUInt() < availableChannels }
+        override fun getItem(position: Int): Channel? {
+            return channelMask.channels.drop(position).firstOrNull()
         }
 
         override fun getItemId(position: Int): Long {
@@ -108,7 +99,7 @@ class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
             parent: ViewGroup?
         ): View? {
             val view = convertView as? TextView ?: layoutInflater.inflate(R.layout.view_spinner_text, parent, false) as View
-            view.findViewById<TextView>(R.id.util_spinner_label).text = (position + 1).toString()
+            view.findViewById<TextView>(R.id.util_spinner_label).text = getItem(position).toString()
             return view
         }
 

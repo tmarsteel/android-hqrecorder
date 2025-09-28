@@ -8,6 +8,7 @@ value class ChannelMask(val mask: Int) {
     operator fun contains(channel: Channel): Boolean = (mask and channel.maskForChannel) == channel.maskForChannel
 
     val channels: Sequence<Channel> get()= Channel.all.filter { it in this }
+    val count: Int get()= mask.countOneBits()
 
     override fun toString(): String {
         val hwChannelNumbers = channels.toList().sorted()
@@ -33,5 +34,7 @@ value class ChannelMask(val mask: Int) {
 
             return masks
         }
+
+        val EMPTY = ChannelMask(0)
     }
 }

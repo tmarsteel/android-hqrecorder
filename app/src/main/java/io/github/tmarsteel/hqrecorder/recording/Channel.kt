@@ -8,7 +8,7 @@ import kotlinx.parcelize.Parcelize
 @JvmInline
 value class Channel(val number: Int) : Comparable<Channel>, Parcelable {
     init {
-        assert(number in 1..32) {
+        require(number in 1..32) {
             "Channels numbers must be in the range [1; 32]"
         }
     }
@@ -19,10 +19,6 @@ value class Channel(val number: Int) : Comparable<Channel>, Parcelable {
 
     fun coerceAtLeast(other: Channel?): Channel {
         return Channel(number.coerceAtLeast(other?.number ?: 0))
-    }
-
-    fun next(): Channel {
-        return Channel(number + 1)
     }
 
     override fun toString(): String = number.toString()
@@ -49,29 +45,6 @@ value class Channel(val number: Int) : Comparable<Channel>, Parcelable {
             }
 
             return mask
-        }
-
-        /**
-         * @return a map from channel to index within a frame where the sample for the channel can be found.
-         */
-        fun getChannelToSampleIndexMapping(format: AudioFormat): Map<Channel, Int> {
-            val indexMask = format.channelIndexMask
-            if (indexMask == AudioFormat.CHANNEL_INVALID) {
-                // TODO!!!
-                return mapOf(Channel.FIRST to 0)
-            }
-            var index = 0
-            var channel = FIRST
-            val map = HashMap<Channel, Int>()
-            while (channel.number <= 32) {
-                if ((indexMask and channel.maskForChannel) != 0) {
-                    map[channel] = index
-                    index++
-                }
-                channel = channel.next()
-            }
-
-            return map
         }
     }
 }
