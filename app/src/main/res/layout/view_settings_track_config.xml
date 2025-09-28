@@ -74,19 +74,18 @@
     <io.github.tmarsteel.hqrecorder.ui.SignalLevelIndicatorView
         android:id="@+id/settings_track_signal_level_left"
         android:layout_width="0dp"
-        android:layout_height="10dp"
+        android:layout_height="16dp"
         android:layout_marginStart="@dimen/activity_horizontal_margin"
         android:layout_marginTop="4dp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="1"
+        app:layout_constraintTop_toTopOf="@id/settings_track_right_source_group"
         app:layout_constraintStart_toEndOf="@id/settings_track_right_source_group"
-        app:layout_constraintTop_toBottomOf="@id/settings_track_label"
-        app:layout_constraintWidth_percent=".7" />
+        app:layout_constraintEnd_toEndOf="parent"
+        />
 
     <io.github.tmarsteel.hqrecorder.ui.SignalLevelIndicatorView
         android:id="@+id/settings_track_signal_level_right"
         android:layout_width="0dp"
-        android:layout_height="10dp"
+        android:layout_height="16dp"
         app:layout_constraintStart_toStartOf="@id/settings_track_signal_level_left"
         app:layout_constraintEnd_toEndOf="@id/settings_track_signal_level_left"
         app:layout_constraintTop_toBottomOf="@id/settings_track_signal_level_left"
