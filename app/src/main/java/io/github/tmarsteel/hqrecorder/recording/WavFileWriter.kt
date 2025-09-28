@@ -1,10 +1,10 @@
 package io.github.tmarsteel.hqrecorder.recording
 
 import android.media.AudioFormat
-import java.io.FileOutputStream
 import java.io.OutputStream
 import java.io.RandomAccessFile
 import java.lang.AutoCloseable
+import java.nio.BufferOverflowException
 import java.nio.ByteBuffer
 
 class WavFileWriter(
@@ -39,25 +39,50 @@ class WavFileWriter(
         outputStream.write("data\u0000\u0000\u0000\u0000".toByteArray(Charsets.US_ASCII))
     }
 
+    private var writeBuffer = ByteBuffer.allocate(4096)
+    init {
+        check(writeBuffer.hasArray())
+    }
+    private var bufferFlushThreshold = writeBuffer.capacity() / 80
+
+    private fun flushBuffer() {
+        writeBuffer.flip()
+        raf.write(writeBuffer.array(), writeBuffer.arrayOffset() + writeBuffer.position(), writeBuffer.limit() - writeBuffer.position())
+        writeBuffer.clear()
+    }
+
     /**
      * Writes the given data to the file, depleting [data]. The data must be in the format
      * as given in [audioFormat] and respect [stereo].
      */
     fun writeSampleData(data: ByteArray, off: Int, len: Int) {
         assurePreamble()
-        outputStream.write(data, off, len)
+        try {
+            writeBuffer.put(data, off, len)
+        }
+        catch (_: BufferOverflowException) {
+            val nRemaining = writeBuffer.remaining()
+            writeSampleData(data, off, nRemaining)
+            writeSampleData(data, off + nRemaining, len - nRemaining)
+            return
+        }
+
+        if (writeBuffer.remaining() <= bufferFlushThreshold) {
+            flushBuffer()
+        }
     }
 
     private var closed = false
     override fun close() {
         check(!closed)
         closed = true
-        val fileSize = outputStream.length()
-        outputStream.seek(0x04)
-        outputStream.writeLE(fileSize.toInt() - 8)
-        outputStream.seek(0x28)
-        outputStream.writeLE(fileSize.toInt() - 44)
-        outputStream.close()
+        flushBuffer()
+        val fileSize = raf.length()
+        raf.seek(0x04)
+        raf.writeLE(fileSize.toInt() - 8)
+        raf.seek(0x28)
+        raf.writeLE(fileSize.toInt() - 44)
+        raf.close()
     }
 
     private companion object {
