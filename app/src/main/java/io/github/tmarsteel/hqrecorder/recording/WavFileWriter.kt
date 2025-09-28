@@ -1,6 +1,7 @@
 package io.github.tmarsteel.hqrecorder.recording
 
 import android.media.AudioFormat
+import java.io.File
 import java.io.OutputStream
 import java.io.RandomAccessFile
 import java.lang.AutoCloseable
@@ -8,7 +9,7 @@ import java.nio.BufferOverflowException
 import java.nio.ByteBuffer
 
 class WavFileWriter(
-    val outputStream: RandomAccessFile,
+    val targetFile: File,
     val stereo: Boolean,
     val audioFormat: AudioFormat,
 ) : AutoCloseable {
@@ -18,6 +19,8 @@ class WavFileWriter(
         }
     }
     private var preambleWritten = false
+
+    val raf = RandomAccessFile(targetFile, "rw")
 
     fun assurePreamble() {
         check(!closed)
@@ -29,14 +32,14 @@ class WavFileWriter(
         val bitsPerSample = BITS_PER_SAMPLE.getValue(audioFormat.encoding)
         val blockAlign = ((bitsPerSample + 7u) / 8u).toUShort()
 
-        outputStream.write("RIFF\u0000\u0000\u0000\u0000WAVEfmt \u0010\u0000\u0000\u0000".toByteArray(Charsets.US_ASCII))
-        outputStream.writeLE(WAV_FORMAT_TAG_BY_ANDROID_FORMAT.getValue(audioFormat.encoding))
-        outputStream.writeLE((if (stereo) 2 else 1).toUShort())
-        outputStream.writeLE(audioFormat.sampleRate)
-        outputStream.writeLE(audioFormat.sampleRate * blockAlign.toInt())
-        outputStream.writeLE(blockAlign)
-        outputStream.writeLE(bitsPerSample)
-        outputStream.write("data\u0000\u0000\u0000\u0000".toByteArray(Charsets.US_ASCII))
+        raf.write("RIFF\u0000\u0000\u0000\u0000WAVEfmt \u0010\u0000\u0000\u0000".toByteArray(Charsets.US_ASCII))
+        raf.writeLE(WAV_FORMAT_TAG_BY_ANDROID_FORMAT.getValue(audioFormat.encoding))
+        raf.writeLE((if (stereo) 2 else 1).toUShort())
+        raf.writeLE(audioFormat.sampleRate)
+        raf.writeLE(audioFormat.sampleRate * blockAlign.toInt())
+        raf.writeLE(blockAlign)
+        raf.writeLE(bitsPerSample)
+        raf.write("data\u0000\u0000\u0000\u0000".toByteArray(Charsets.US_ASCII))
     }
 
     private var writeBuffer = ByteBuffer.allocate(4096)

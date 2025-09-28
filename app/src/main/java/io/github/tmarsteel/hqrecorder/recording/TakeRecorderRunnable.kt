@@ -1,10 +1,16 @@
 package io.github.tmarsteel.hqrecorder.recording
 
+import android.content.ContentValues
 import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
+import android.net.Uri
+import android.provider.MediaStore
 import android.util.Log
-import java.io.RandomAccessFile
+import java.io.Closeable
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.nio.BufferUnderflowException
 import java.nio.ByteBuffer
 import java.time.LocalDateTime
@@ -25,25 +31,15 @@ class TakeRecorderRunnable(
     private var stopSignal = AtomicBoolean(false)
 
     private fun initializeTrackRecordingStates(): List<TrackInRecording> {
-        val takeTimestamp = LocalDateTime.now().format(TIMESTAMP_FORMAT)
+        val takeTimestamp = LocalDateTime.now()
 
         return tracks.map { track ->
-            /*val mediaStoreValues = ContentValues().apply {
-                put(MediaStore.Audio.Media.DISPLAY_NAME, "${takeTimestamp}_${trackConfig.label}.wav")
-                put(MediaStore.Audio.Media.IS_PENDING, 1)
-                put(MediaStore.Audio.Media.IS_RECORDING, 1)
-            }
-            val mediaUri = context.applicationContext.contentResolver.insert(
-                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                mediaStoreValues
-            )!!*/
-            val file = context.externalCacheDir!!.toPath().resolve("${takeTimestamp}_${track.label}.wav").toFile()
-            val outputStream = RandomAccessFile(file, "rw")
-            Log.i(javaClass.name, "Writing to $file")
-
+            val targetFile = File.createTempFile("take_$takeTimestamp", track.label)
             TrackInRecording(
+                this@TakeRecorderRunnable.context,
+                takeTimestamp = takeTimestamp,
                 track = track,
-                writer = WavFileWriter(outputStream, track.rightDeviceChannel != null, audioRecord.format),
+                writer = WavFileWriter(targetFile, track.rightDeviceChannel != null, audioRecord.format),
                 channelMask.channels.indexOf(track.leftOrMonoDeviceChannel),
                 track.rightDeviceChannel?.let(channelMask.channels::indexOf),
             )
@@ -78,20 +74,26 @@ class TakeRecorderRunnable(
                         }
                     }
                 }
-                Log.i(javaClass.name, "Wrote $timeInBuffer of audio in $timeSpentWriting to ${trackStates.size} tracks")
 
                 Thread.sleep(50)
             }
         }
         finally {
-            try {
-                trackStates.forEach {
-                    it.writer.close()
+            var closeEx: Exception? = null
+            trackStates.forEach { trackState ->
+                try {
+                    trackState.close()
+                } catch (ex: Exception) {
+                    if (closeEx == null) {
+                        closeEx = ex
+                    } else {
+                        closeEx.addSuppressed(ex)
+                    }
                 }
             }
-            catch (e: Throwable) {
+            if (closeEx != null) {
                 result = Result.ERROR
-                throw e
+                throw closeEx
             }
         }
         result = Result.SUCCESS
@@ -133,11 +135,26 @@ class TakeRecorderRunnable(
     }
 
     private data class TrackInRecording(
+        val context: Context,
+        val takeTimestamp: LocalDateTime,
         val track: RecordingConfig.InputTrackConfig,
         val writer: WavFileWriter,
         val leftOrMonoChannelSampleIndexInFrame: Int,
         val rightChannelSampleIndexInFrame: Int?,
-    ) {
+    ) : Closeable {
+        val mediaUri: Uri
+        init {
+            val mediaStoreValues = ContentValues().apply {
+                put(MediaStore.Audio.Media.DISPLAY_NAME, "${TIMESTAMP_FORMAT.format(takeTimestamp)}_${track.label}.wav")
+                put(MediaStore.Audio.Media.IS_PENDING, 1)
+                put(MediaStore.Audio.Media.IS_RECORDING, 1)
+            }
+            mediaUri = context.contentResolver.insert(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                mediaStoreValues
+            )!!
+        }
+
         private val copyBuffer = ByteArray(if (rightChannelSampleIndexInFrame != null) 8 else 4)
         fun writeDataFromFrame(compoundFrame: ByteBuffer, sampleSizeInBytes: Int) {
             extractSampleBytes(compoundFrame, sampleSizeInBytes, leftOrMonoChannelSampleIndexInFrame, copyBuffer, 0)
@@ -167,6 +184,23 @@ class TakeRecorderRunnable(
             }
 
             compoundFrame.get(target, off + indexOfFirst, sampleSizeInBytes)
+        }
+
+        override fun close() {
+            writer.close()
+            FileOutputStream(context.contentResolver.openFileDescriptor(mediaUri, "w")!!.fileDescriptor).use { mediaStoreOut ->
+                FileInputStream(writer.targetFile).use { tmpFileIn ->
+                    tmpFileIn.copyTo(mediaStoreOut)
+                }
+            }
+            context.contentResolver.update(
+                mediaUri,
+                ContentValues().apply {
+                    put(MediaStore.Audio.Media.IS_PENDING, false)
+                },
+                null
+            )
+            writer.targetFile.delete()
         }
     }
 }
