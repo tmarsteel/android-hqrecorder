@@ -21,9 +21,11 @@ class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : 
     var channelIndicator: String = "L"
         set(value) {
             field = value
-            measuredTextChannelIndicator = MeasuredText.Builder(value.toCharArray())
-                .appendStyleRun(textPaint, value.length, false)
-                .build()
+            var mtBuilder = MeasuredText.Builder(value.toCharArray())
+            if (value.isNotEmpty()) {
+                mtBuilder = mtBuilder.appendStyleRun(textPaint, value.length, false)
+            }
+            measuredTextChannelIndicator = mtBuilder.build()
             postInvalidate()
         }
 
