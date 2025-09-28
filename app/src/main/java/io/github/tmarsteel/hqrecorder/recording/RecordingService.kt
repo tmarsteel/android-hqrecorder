@@ -164,6 +164,16 @@ class RecordingService : Service() {
                 audioRecord!!.preferredDevice = device
             }
 
+            audioRecord!!.startRecording()
+            if (audioRecord!!.routedDevice.id != device.id) {
+                audioRecord!!.stop()
+                audioRecord!!.release()
+                audioRecord = null
+                return StartOrStopListeningCommand.Response(
+                    StartOrStopListeningCommand.Response.Result.DEVICE_NOT_AVAILABLE
+                )
+            }
+
             state = ListeningAndPossiblyRecording(
                 this,
                 audioRecord!!
