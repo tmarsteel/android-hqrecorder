@@ -259,6 +259,7 @@ class RecordingService : Service() {
             val runnable = TakeRecorderRunnable(
                 applicationContext,
                 configuredState.config.tracks,
+                configuredState.config.channelMask,
                 audioRecord,
                 buffer,
             )
@@ -299,9 +300,7 @@ class RecordingService : Service() {
                 return false
             }
 
-            val maxAvailableChannel = Channel(device.channelCounts.max())
-            val maxRequestedChannel = config.tracks.maxOfOrNull { it.leftOrMonoDeviceChannel.coerceAtLeast(it.rightDeviceChannel) }
-            if (maxRequestedChannel == null || maxRequestedChannel > maxAvailableChannel) {
+            if (config.channelMask.mask !in device.channelMasks) {
                 return false
             }
 

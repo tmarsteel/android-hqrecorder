@@ -9,6 +9,7 @@ data class RecordingConfig(
     var deviceAddress: String,
     /** [android.media.AudioDeviceInfo.getId] of the target device */
     var deviceId: Int,
+    var channelMask: ChannelMask,
     /**
      * @see android.media.AudioFormat.getSampleRate
      * @see android.media.AudioRecord.getSampleRate

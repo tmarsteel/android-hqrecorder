@@ -41,15 +41,11 @@ class WavFileWriter(
 
     /**
      * Writes the given data to the file, depleting [data]. The data must be in the format
-     * as given in [encoding] and respect [stereo].
+     * as given in [audioFormat] and respect [stereo].
      */
-    fun writeSampleData(data: ByteBuffer) {
+    fun writeSampleData(data: ByteArray, off: Int, len: Int) {
         assurePreamble()
-        if (!data.hasArray()) {
-            TODO()
-        }
-        outputStream.write(data.array(), data.arrayOffset() + data.position(), data.limit())
-        data.position(data.limit())
+        outputStream.write(data, off, len)
     }
 
     private var closed = false

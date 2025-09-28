@@ -1,9 +1,12 @@
 package io.github.tmarsteel.hqrecorder.recording
 
 import android.media.AudioDeviceInfo
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
 
+@Parcelize
 @JvmInline
-value class ChannelMask(val mask: Int) {
+value class ChannelMask(val mask: Int) : Parcelable {
     fun isSubsetOf(other: ChannelMask): Boolean = (other.mask and this.mask) == this.mask
     operator fun contains(channel: Channel): Boolean = (mask and channel.maskForChannel) == channel.maskForChannel
 

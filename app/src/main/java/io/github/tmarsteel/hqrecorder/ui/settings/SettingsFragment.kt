@@ -37,7 +37,14 @@ class SettingsFragment : Fragment(), TrackConfigAdapter.TrackConfigChangedListen
 
     private lateinit var trackConfigAdapter: TrackConfigAdapter
 
-    private var recordingConfig = RecordingConfig("", 0, 44100, AudioFormat.ENCODING_PCM_16BIT, emptyList())
+    private var recordingConfig = RecordingConfig(
+        "",
+        0,
+        ChannelMask.EMPTY,
+        44100,
+        AudioFormat.ENCODING_PCM_16BIT,
+        emptyList(),
+    )
 
     override fun onCreateView(
         inflater: LayoutInflater,

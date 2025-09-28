@@ -20,6 +20,7 @@ import androidx.lifecycle.ViewModelProvider
 import io.github.tmarsteel.hqrecorder.R
 import io.github.tmarsteel.hqrecorder.databinding.FragmentRecordBinding
 import io.github.tmarsteel.hqrecorder.recording.Channel
+import io.github.tmarsteel.hqrecorder.recording.ChannelMask
 import io.github.tmarsteel.hqrecorder.recording.RecordingConfig
 import io.github.tmarsteel.hqrecorder.recording.TakeRecorderRunnable
 import io.github.tmarsteel.hqrecorder.util.bytesPerSecond
@@ -111,9 +112,11 @@ class RecordFragment : Fragment() {
         audioRecord!!.startRecording()
         binding.levelIndicator.reset()
 
+        val channelMask = ChannelMask(AudioFormat.CHANNEL_IN_MONO)
         recorderRunnable = TakeRecorderRunnable(
             requireContext(),
-            listOf(RecordingConfig.InputTrackConfig(1, "Test", Channel(1), null)),
+            listOf(RecordingConfig.InputTrackConfig(1, "Test", channelMask.channels.single(), null)),
+            channelMask,
             audioRecord!!,
             ByteBuffer.allocateDirect(audioFormat.bytesPerSecond)
         )
