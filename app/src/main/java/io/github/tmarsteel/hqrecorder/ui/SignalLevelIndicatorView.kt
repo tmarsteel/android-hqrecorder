@@ -22,7 +22,7 @@ class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : 
         set(value) {
             field = value
             measuredTextChannelIndicator = MeasuredText.Builder(value.toCharArray())
-                .appendStyleRun(textPaint, 1, false)
+                .appendStyleRun(textPaint, value.length, false)
                 .build()
             postInvalidate()
         }
