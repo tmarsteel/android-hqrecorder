@@ -7,6 +7,7 @@ import android.graphics.Rect
 import android.graphics.text.MeasuredText
 import android.util.AttributeSet
 import android.util.TypedValue
+import android.view.MotionEvent
 import android.view.View
 import io.github.tmarsteel.hqrecorder.R
 import io.github.tmarsteel.hqrecorder.util.getRelationToInDecibels
@@ -166,5 +167,14 @@ class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : 
         peakSample = 0.0f
         clipIndicator = false
         postInvalidate()
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked != MotionEvent.ACTION_DOWN) {
+            return false
+        }
+
+        reset()
+        return true
     }
 }
