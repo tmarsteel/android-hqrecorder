@@ -1,31 +1,17 @@
 package io.github.tmarsteel.hqrecorder.ui.record
 
-import android.Manifest
-import android.content.ComponentName
-import android.content.ServiceConnection
 import android.content.pm.PackageManager
-import android.media.AudioFormat
-import android.media.AudioRecord
 import android.os.Bundle
-import android.os.IBinder
-import android.os.Messenger
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
-import androidx.core.app.ActivityCompat
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import io.github.tmarsteel.hqrecorder.R
 import io.github.tmarsteel.hqrecorder.databinding.FragmentRecordBinding
-import io.github.tmarsteel.hqrecorder.recording.Channel
-import io.github.tmarsteel.hqrecorder.recording.ChannelMask
-import io.github.tmarsteel.hqrecorder.recording.RecordingConfig
-import io.github.tmarsteel.hqrecorder.recording.TakeRecorderRunnable
-import io.github.tmarsteel.hqrecorder.util.bytesPerSecond
-import io.github.tmarsteel.hqrecorder.util.minBufferSizeInBytes
-import java.nio.ByteBuffer
+import kotlinx.coroutines.launch
 
 class RecordFragment : Fragment() {
 
@@ -35,30 +21,11 @@ class RecordFragment : Fragment() {
     // onDestroyView.
     private val binding get() = _binding!!
 
-    private var recordingServiceMessenger: Messenger? = null
-    private val recordingServiceConnection = object : ServiceConnection {
-        override fun onServiceConnected(
-            name: ComponentName?,
-            service: IBinder?
-        ) {
-            service?.let {
-                recordingServiceMessenger = Messenger(it)
-            }
-        }
-
-        override fun onServiceDisconnected(name: ComponentName?) {
-            recordingServiceMessenger = null
-        }
-    }
-
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        val recordViewModel =
-            ViewModelProvider(this).get(RecordViewModel::class.java)
-
         _binding = FragmentRecordBinding.inflate(inflater, container, false)
         val root: View = binding.root
 
@@ -77,54 +44,19 @@ class RecordFragment : Fragment() {
         _binding = null
     }
 
-    private var audioRecord: AudioRecord? = null
-
-    private val audioFormat = AudioFormat.Builder()
-        .setSampleRate(92000)
-        .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
-        .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
-        .build()
-
-    private var recorderRunnable: TakeRecorderRunnable? = null
-
     fun startRecordingNextTake() {
-        recorderRunnable?.stop()
-        binding.levelIndicator.clipIndicator = false
-
-        val buffer = ByteBuffer.allocateDirect(audioFormat.frameSizeInBytes * audioFormat.sampleRate)
-
-        if (audioRecord == null) {
-            if (ActivityCompat.checkSelfPermission(
-                    requireContext(),
-                    Manifest.permission.RECORD_AUDIO
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                Log.i(TAG, "Requesting microphone permission")
-                ActivityCompat.requestPermissions(requireActivity(), arrayOf("android.permission.RECORD_AUDIO"), REQUEST_CODE_PERMISSION_RECORD_AUDIO_ON_NEXT_TAKE)
-                return
+        binding.nextTakeBt.isEnabled = false
+        lifecycleScope.launch {
+            try {
             }
-
-            audioRecord = AudioRecord.Builder()
-                .setAudioFormat(audioFormat)
-                .setBufferSizeInBytes((audioFormat.minBufferSizeInBytes * 2).coerceAtLeast(buffer.capacity() * 2))
-                .build()
+            finally {
+                binding.nextTakeBt.isEnabled = true
+            }
         }
-        audioRecord!!.startRecording()
-        binding.levelIndicator.reset()
-
-        val channelMask = ChannelMask(AudioFormat.CHANNEL_IN_MONO)
-        recorderRunnable = TakeRecorderRunnable(
-            requireContext(),
-            listOf(RecordingConfig.InputTrackConfig(1, "Test", channelMask.channels.single(), null)),
-            channelMask,
-            audioRecord!!,
-        )
-        Thread(recorderRunnable!!).start()
     }
 
     private fun stopRecording() {
-        recorderRunnable?.stop()
-        audioRecord?.stop()
+
     }
 
     override fun onRequestPermissionsResult(

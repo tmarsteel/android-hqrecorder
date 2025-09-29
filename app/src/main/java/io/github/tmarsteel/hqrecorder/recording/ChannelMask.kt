@@ -6,9 +6,10 @@ import kotlinx.parcelize.Parcelize
 
 @Parcelize
 @JvmInline
-value class ChannelMask(val mask: Int) : Parcelable {
+value class ChannelMask(val mask: Int) : Parcelable, Comparable<ChannelMask> {
     fun isSubsetOf(other: ChannelMask): Boolean = (other.mask and this.mask) == this.mask
     operator fun contains(channel: Channel): Boolean = (mask and channel.maskForChannel) == channel.maskForChannel
+    operator fun contains(otherMask: ChannelMask): Boolean = (mask and otherMask.mask) == otherMask.mask
 
     val channels: Sequence<Channel> get()= Channel.all.filter { it in this }
     val count: Int get()= mask.countOneBits()
@@ -20,6 +21,10 @@ value class ChannelMask(val mask: Int) : Parcelable {
             2 -> "hardware channels ${hwChannelNumbers[0]} + ${hwChannelNumbers[1]}"
             else -> "hardware channels ${hwChannelNumbers.joinToString(separator = ", ")}"
         }
+    }
+
+    override fun compareTo(other: ChannelMask): Int {
+        return this.count.compareTo(other.count)
     }
 
     companion object {
@@ -36,6 +41,15 @@ value class ChannelMask(val mask: Int) : Parcelable {
             }
 
             return masks
+        }
+
+        fun forChannels(channels: Iterable<Channel>): ChannelMask {
+            var mask = 0
+            for (ch in channels) {
+                mask = mask or ch.maskForChannel
+            }
+
+            return ChannelMask(mask)
         }
 
         val EMPTY = ChannelMask(0)

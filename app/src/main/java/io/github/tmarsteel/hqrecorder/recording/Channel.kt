@@ -1,6 +1,5 @@
 package io.github.tmarsteel.hqrecorder.recording
 
-import android.media.AudioFormat
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 
@@ -33,18 +32,6 @@ value class Channel(val number: Int) : Comparable<Channel>, Parcelable {
             for (bit in 0..31) {
                 yield(Channel(bit + 1))
             }
-        }
-
-        /**
-         * Builds a value of the format as [android.media.AudioFormat.getChannelIndexMask].
-         */
-        fun buildIndexMask(channels: Iterable<Channel>): Int {
-            var mask = 0
-            for (ch in channels) {
-                mask = mask or ch.maskForChannel
-            }
-
-            return mask
         }
     }
 }

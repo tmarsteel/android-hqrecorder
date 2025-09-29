@@ -68,7 +68,7 @@ class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
                 rightSourceSpinner.adapter = adapter
             }
             rightSourceSpinner.setSelection(channelMask.channels.indexOf(item.rightDeviceChannel!!))
-            rightSourceSpinner.onItemSelectedListener = SourceChannelChangeListener(item.id, RIGHT_DEFAULT_CHANNEL, item::leftOrMonoDeviceChannel::set)
+            rightSourceSpinner.onItemSelectedListener = SourceChannelChangeListener(item.id, RIGHT_DEFAULT_CHANNEL, item::rightDeviceChannel::set)
         }
 
         view.findViewById<Button>(R.id.settings_track_delete_button).setOnClickListener {
@@ -118,12 +118,12 @@ class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
 
     inner class SourceChannelChangeListener(val trackId: Long, val defaultChannel: Channel, val updateTarget: (Channel)  -> Unit) : AdapterView.OnItemSelectedListener {
         override fun onItemSelected(
-            parent: AdapterView<*>?,
+            parent: AdapterView<*>,
             view: View?,
             position: Int,
             id: Long
         ) {
-            updateTarget(Channel(position + 1))
+            updateTarget(parent.adapter.getItem(position) as Channel)
             trackConfigChangedListener?.onTrackConfigChanged(trackId)
         }
 

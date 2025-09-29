@@ -1,9 +1,13 @@
 package io.github.tmarsteel.hqrecorder.recording
 
 import android.Manifest
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -13,14 +17,17 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.Message
 import android.os.Messenger
+import android.util.Log
 import androidx.core.app.ActivityCompat
+import androidx.core.content.getSystemService
+import io.github.tmarsteel.hqrecorder.R
 import io.github.tmarsteel.hqrecorder.util.bytesPerSecond
 import io.github.tmarsteel.hqrecorder.util.minBufferSizeInBytes
-import java.nio.ByteBuffer
-import java.util.Objects
-import java.util.concurrent.LinkedBlockingDeque
-import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.concurrent.thread
+import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
+
+const val NOTIFICATION_CHANNEL_RECORDING_SERVICE = "recording_service"
+const val NOTIFICATION_ID_RECORDING_SERVICE_FG = 1
 
 class RecordingService : Service() {
     private lateinit var audioManager: AudioManager
@@ -31,7 +38,20 @@ class RecordingService : Service() {
     }
 
     override fun onCreate() {
+        val channel = NotificationChannel(NOTIFICATION_CHANNEL_RECORDING_SERVICE, NOTIFICATION_CHANNEL_RECORDING_SERVICE, NotificationManager.IMPORTANCE_NONE).also {
+            it.description = "Notification for the recording background task"
+        }
+        getSystemService<NotificationManager>()!!.createNotificationChannel(channel)
+        val notification = Notification.Builder(this, NOTIFICATION_CHANNEL_RECORDING_SERVICE)
+            .setContentTitle(getString(R.string.notification_record_ready))
+            .build()
+        startForeground(NOTIFICATION_ID_RECORDING_SERVICE_FG, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+
         audioManager = getSystemService(AudioManager::class.java)
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        return START_NOT_STICKY
     }
 
     override fun onDestroy() {
@@ -50,11 +70,7 @@ class RecordingService : Service() {
                 }
                 StartOrStopListeningCommand.WHAT_VALUE -> {
                     val command = StartOrStopListeningCommand.fromMessage(msg)!!
-                    val response = if (command.start) {
-                        state.startListening()
-                    } else {
-                        state.stopListening()
-                    }
+                    val response = state.startOrStopListening(command, msg.replyTo)
                     msg.replyTo?.send(StartOrStopListeningCommand.Response.buildMessage(response))
                 }
                 StartNewTakeCommand.WHAT_VALUE -> {
@@ -64,7 +80,11 @@ class RecordingService : Service() {
                 }
                 FinishTakeCommand.WHAT_VALUE -> {
                     val command = FinishTakeCommand.fromMessage(msg)!!
-                    state.finishTake()
+                    val response = state.finishTake()
+                    msg.replyTo?.send(FinishTakeCommand.buildMessage())
+                }
+                else -> {
+                    Log.e(javaClass.name, "Unrecognized message $msg")
                 }
             }
         }
@@ -72,8 +92,7 @@ class RecordingService : Service() {
 
     private interface State {
         fun updateRecordingConfig(config: RecordingConfig): UpdateRecordingConfigCommand.Response
-        fun startListening(): StartOrStopListeningCommand.Response
-        fun stopListening(): StartOrStopListeningCommand.Response
+        fun startOrStopListening(command: StartOrStopListeningCommand, subscriber: Messenger?): StartOrStopListeningCommand.Response
         fun startNewTake(): StartNewTakeCommand.Response
         fun finishTake(): FinishTakeCommand.Response
     }
@@ -86,29 +105,24 @@ class RecordingService : Service() {
                     UpdateRecordingConfigCommand.Response.Result.INVALID
                 )
 
-            val desiredChannelIndexMask = Channel.buildIndexMask(config.tracks.flatMap { listOfNotNull(it.leftOrMonoDeviceChannel, it.rightDeviceChannel) })
-            val chosenIndexMask = device.channelIndexMasks
-                .filter { it and desiredChannelIndexMask == desiredChannelIndexMask }
+            val desiredChannelMask = ChannelMask.forChannels(config.tracks.flatMap { listOfNotNull(it.leftOrMonoDeviceChannel, it.rightDeviceChannel) })
+            val chosenChannelMask = device.channelMasks
+                .map(::ChannelMask)
+                .filter { desiredChannelMask in it }
                 .minOrNull()
 
-            if (chosenIndexMask == null) {
+            if (chosenChannelMask == null) {
                 // the requested channels cannot be requested from the device
                 return UpdateRecordingConfigCommand.Response(
                     UpdateRecordingConfigCommand.Response.Result.INVALID
                 )
             }
 
-            this@RecordingService.state = Configured(device, config, chosenIndexMask)
+            this@RecordingService.state = Configured(device, config, chosenChannelMask)
             return UpdateRecordingConfigCommand.Response(UpdateRecordingConfigCommand.Response.Result.OK)
         }
 
-        override fun startListening(): StartOrStopListeningCommand.Response {
-            return StartOrStopListeningCommand.Response(
-                StartOrStopListeningCommand.Response.Result.NOT_CONFIGURED
-            )
-        }
-
-        override fun stopListening(): StartOrStopListeningCommand.Response {
+        override fun startOrStopListening(command: StartOrStopListeningCommand, subscriber: Messenger?): StartOrStopListeningCommand.Response {
             return StartOrStopListeningCommand.Response(
                 StartOrStopListeningCommand.Response.Result.NOT_CONFIGURED
             )
@@ -130,15 +144,17 @@ class RecordingService : Service() {
     private inner class Configured(
         val device: AudioDeviceInfo,
         val config: RecordingConfig,
-        val channelIndexMask: Int,
+        val channelMask: ChannelMask,
     ) : State {
         val audioFormat = AudioFormat.Builder()
             .setSampleRate(config.samplingRate)
             .setEncoding(config.encoding)
-            .setChannelIndexMask(channelIndexMask)
+            .setChannelMask(channelMask.mask)
             .build()
 
         private var audioRecord: AudioRecord? = null
+
+        private val statusSubscribers = Collections.newSetFromMap<Messenger>(ConcurrentHashMap())
 
         override fun updateRecordingConfig(config: RecordingConfig): UpdateRecordingConfigCommand.Response {
             state = Initial()
@@ -146,7 +162,15 @@ class RecordingService : Service() {
             return state.updateRecordingConfig(config)
         }
 
-        override fun startListening(): StartOrStopListeningCommand.Response {
+        override fun startOrStopListening(command: StartOrStopListeningCommand, subscriber: Messenger?): StartOrStopListeningCommand.Response {
+            subscriber?.let(if (command.start) statusSubscribers::add else statusSubscribers::remove)
+
+            if (!command.start) {
+                return StartOrStopListeningCommand.Response(
+                    StartOrStopListeningCommand.Response.Result.NOT_LISTENING
+                )
+            }
+
             if (ActivityCompat.checkSelfPermission(
                     applicationContext,
                     Manifest.permission.RECORD_AUDIO
@@ -176,16 +200,11 @@ class RecordingService : Service() {
 
             state = ListeningAndPossiblyRecording(
                 this,
-                audioRecord!!
+                audioRecord!!,
+                statusSubscribers,
             )
             return StartOrStopListeningCommand.Response(
                 StartOrStopListeningCommand.Response.Result.LISTENING
-            )
-        }
-
-        override fun stopListening(): StartOrStopListeningCommand.Response {
-            return StartOrStopListeningCommand.Response(
-                StartOrStopListeningCommand.Response.Result.NOT_LISTENING
             )
         }
 
@@ -213,14 +232,24 @@ class RecordingService : Service() {
     private inner class ListeningAndPossiblyRecording(
         private val configuredState: Configured,
         private val audioRecord: AudioRecord,
+        private val statusSubscribers: MutableSet<Messenger>,
     ) : State {
         init {
             audioRecord.startRecording()
         }
 
-        val buffer = ByteBuffer.allocateDirect(audioRecord.format.bytesPerSecond)
-        var currentTakeRecordingRunnable: TakeRecorderRunnable? = null
-        var currentTakeRecordingThread: Thread? = null
+        val listeningRunnable = TakeRecorderRunnable(
+            applicationContext,
+            configuredState.config.tracks,
+            configuredState.channelMask,
+            audioRecord,
+            statusSubscribers,
+        )
+        val listeningThread: Thread = Thread(listeningRunnable)
+
+        init {
+            listeningThread.start()
+        }
 
         override fun updateRecordingConfig(config: RecordingConfig): UpdateRecordingConfigCommand.Response {
             return UpdateRecordingConfigCommand.Response(
@@ -228,45 +257,52 @@ class RecordingService : Service() {
             )
         }
 
-        override fun startListening(): StartOrStopListeningCommand.Response {
-            return StartOrStopListeningCommand.Response(
-                StartOrStopListeningCommand.Response.Result.LISTENING
-            )
-        }
+        override fun startOrStopListening(
+            command: StartOrStopListeningCommand,
+            subscriber: Messenger?
+        ): StartOrStopListeningCommand.Response {
+            subscriber?.let(if (command.start) statusSubscribers::add else statusSubscribers::remove)
 
-        override fun stopListening(): StartOrStopListeningCommand.Response {
-            audioRecord.stop()
-            state = configuredState
-            return StartOrStopListeningCommand.Response(
-                StartOrStopListeningCommand.Response.Result.NOT_LISTENING
-            )
+            if (command.start) {
+                return StartOrStopListeningCommand.Response(
+                    StartOrStopListeningCommand.Response.Result.LISTENING
+                )
+            } else {
+                audioRecord.stop()
+                state = configuredState
+                val finalStatusUpdate = RecordingStatusServiceMessage.buildMessage(RecordingStatusServiceMessage(
+                    isListening = false,
+                    isRecording = false,
+                    loadPercentage = 0u,
+                    trackLevels = emptyMap(),
+                ))
+                (statusSubscribers + listOfNotNull(subscriber)).forEach {
+                    it.send(finalStatusUpdate)
+                }
+                return StartOrStopListeningCommand.Response(
+                    StartOrStopListeningCommand.Response.Result.NOT_LISTENING
+                )
+            }
         }
 
         private fun assureTakeFinished(): Boolean {
-            val thread = currentTakeRecordingThread
-            if (thread == null || !thread.isAlive) {
+            val localThread = listeningThread
+            if (localThread == null || !localThread.isAlive) {
                 return false
             }
 
-            currentTakeRecordingRunnable!!.stop()
-            thread.join()
+            val localRunnable = listeningRunnable
+            if (localRunnable == null || !localRunnable.isRecording) {
+                return false
+            }
+
+            listeningRunnable!!.sendCommand(TakeRecorderRunnable.Command.FINISH_TAKE)
             return true
         }
 
         override fun startNewTake(): StartNewTakeCommand.Response {
             assureTakeFinished()
-
-            val runnable = TakeRecorderRunnable(
-                applicationContext,
-                configuredState.config.tracks,
-                configuredState.config.channelMask,
-                audioRecord,
-                buffer,
-            )
-            val thread = Thread(runnable)
-            thread.start()
-            currentTakeRecordingRunnable = runnable
-            currentTakeRecordingThread = thread
+            listeningRunnable!!.sendCommand(TakeRecorderRunnable.Command.NEXT_TAKE)
             return StartNewTakeCommand.Response(
                 StartNewTakeCommand.Response.Result.RECORDING
             )

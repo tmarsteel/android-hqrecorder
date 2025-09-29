@@ -21,5 +21,7 @@
     <string name="settings_source_leftmono">Left/Mono Channel</string>
     <string name="settings_source_right">Right Channel</string>
 
+    <string name="notification_record_ready">Ready to record.</string>
+
     <string name="error_no_audio_manager">Couldn\'t access the AudioManager API</string>
 </resources>

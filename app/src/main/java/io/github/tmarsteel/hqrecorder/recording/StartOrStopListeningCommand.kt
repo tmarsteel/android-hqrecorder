@@ -11,16 +11,24 @@ import kotlinx.parcelize.Parcelize
  */
 @Parcelize
 class StartOrStopListeningCommand(
-    val start: Boolean
+    /**
+     * if true, assures listening is started; if false, assures its stopped
+     */
+    val start: Boolean,
+    /**
+     * if true, assures the [Message.replyTo] [android.os.Messenger] will receive [RecordingStatusServiceMessage]s; if false,
+     * assures the [Message.replyTo] no longer receives these updates.
+     */
+    val statusSubscription: Boolean,
 ) : Parcelable {
     companion object {
         /** @see Message.what */
         const val WHAT_VALUE = 7
 
-        fun buildMessage(start: Boolean): Message {
+        fun buildMessage(start: Boolean, statusSubscription: Boolean): Message {
             val message = Message.obtain(null, WHAT_VALUE)
             message.data = Bundle()
-            message.data.putParcelable(null, StartOrStopListeningCommand(start))
+            message.data.putParcelable(null, StartOrStopListeningCommand(start, statusSubscription))
             return message
         }
 
