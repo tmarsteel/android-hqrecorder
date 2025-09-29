@@ -267,22 +267,27 @@ class RecordingService : Service() {
                 return StartOrStopListeningCommand.Response(
                     StartOrStopListeningCommand.Response.Result.LISTENING
                 )
-            } else {
-                audioRecord.stop()
-                state = configuredState
-                val finalStatusUpdate = RecordingStatusServiceMessage.buildMessage(RecordingStatusServiceMessage(
-                    isListening = false,
-                    isRecording = false,
-                    loadPercentage = 0u,
-                    trackLevels = emptyMap(),
-                ))
-                (statusSubscribers + listOfNotNull(subscriber)).forEach {
-                    it.send(finalStatusUpdate)
-                }
+            }
+            if (listeningRunnable.isRecording) {
                 return StartOrStopListeningCommand.Response(
-                    StartOrStopListeningCommand.Response.Result.NOT_LISTENING
+                    StartOrStopListeningCommand.Response.Result.STILL_RECORDING
                 )
             }
+
+            listeningRunnable.sendCommand(TakeRecorderRunnable.Command.STOP_LISTENING)
+            state = configuredState
+            val finalStatusUpdate = RecordingStatusServiceMessage.buildMessage(RecordingStatusServiceMessage(
+                isListening = false,
+                isRecording = false,
+                loadPercentage = 0u,
+                trackLevels = emptyMap(),
+            ))
+            (statusSubscribers + listOfNotNull(subscriber)).forEach {
+                it.send(finalStatusUpdate)
+            }
+            return StartOrStopListeningCommand.Response(
+                StartOrStopListeningCommand.Response.Result.NOT_LISTENING
+            )
         }
 
         private fun assureTakeFinished(): Boolean {

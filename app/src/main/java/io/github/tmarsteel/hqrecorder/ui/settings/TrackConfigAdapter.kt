@@ -32,12 +32,12 @@ class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
         parent: ViewGroup
     ): View {
         val view = super.getView(position, convertView, parent)
-        val item = getItem(position) ?: return view
+        val track = getItem(position) ?: return view
 
         val labelEdit = view.findViewById<EditText>(R.id.settings_track_label)
-        labelEdit.setText(item.label)
+        labelEdit.setText(track.label)
         labelEdit.setOnEditorActionListener { innerLabelEdit, _ , _ ->
-            item.label = innerLabelEdit.text.toString()
+            track.label = innerLabelEdit.text.toString()
             false
         }
 
@@ -46,33 +46,38 @@ class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
             val adapter = SourceChannelAdapter(parent.context)
             leftSourceSpinner.adapter = adapter
         }
-        leftSourceSpinner.setSelection(channelMask.channels.indexOf(item.leftOrMonoDeviceChannel))
-        leftSourceSpinner.onItemSelectedListener = SourceChannelChangeListener(item.id, LEFT_DEFAULT_CHANNEL, item::leftOrMonoDeviceChannel::set)
+        leftSourceSpinner.setSelection(channelMask.channels.indexOf(track.leftOrMonoDeviceChannel))
+        leftSourceSpinner.onItemSelectedListener = SourceChannelChangeListener(track.id, LEFT_DEFAULT_CHANNEL, track::leftOrMonoDeviceChannel::set)
         val leftLevel = view.findViewById<SignalLevelIndicatorView>(R.id.settings_track_signal_level_left)
-        leftLevel.channelIndicator = if (item.rightDeviceChannel != null) "L" else ""
+        leftLevel.channelIndicator = if (track.rightDeviceChannel != null) "L" else ""
+        leftLevel.indicatesLeftOrRight = false
+        leftLevel.indicatesTrackId = track.id
 
         val rightGroup = view.findViewById<View>(R.id.settings_track_right_source_group)
         val rightSourceSpinner = view.findViewById<Spinner>(R.id.settings_track_right_source_spinner)
         val rightLevel = view.findViewById<SignalLevelIndicatorView>(R.id.settings_track_signal_level_right)
-        if (item.rightDeviceChannel == null) {
+        if (track.rightDeviceChannel == null) {
             rightSourceSpinner.onItemSelectedListener = null
             rightGroup.visibility = View.INVISIBLE
             rightLevel.visibility = View.INVISIBLE
+            rightLevel.indicatesTrackId = null
         } else {
             rightGroup.visibility = View.VISIBLE
             rightLevel.visibility = View.VISIBLE
             rightLevel.channelIndicator = "R"
+            rightLevel.indicatesTrackId = track.id
+            rightLevel.indicatesLeftOrRight = true
 
             rightSourceSpinner.adapter as? SourceChannelAdapter ?: run {
                 val adapter = SourceChannelAdapter(parent.context)
                 rightSourceSpinner.adapter = adapter
             }
-            rightSourceSpinner.setSelection(channelMask.channels.indexOf(item.rightDeviceChannel!!))
-            rightSourceSpinner.onItemSelectedListener = SourceChannelChangeListener(item.id, RIGHT_DEFAULT_CHANNEL, item::rightDeviceChannel::set)
+            rightSourceSpinner.setSelection(channelMask.channels.indexOf(track.rightDeviceChannel!!))
+            rightSourceSpinner.onItemSelectedListener = SourceChannelChangeListener(track.id, RIGHT_DEFAULT_CHANNEL, track::rightDeviceChannel::set)
         }
 
         view.findViewById<Button>(R.id.settings_track_delete_button).setOnClickListener {
-            trackConfigChangedListener?.onTrackDeleteRequested(item.id)
+            trackConfigChangedListener?.onTrackDeleteRequested(track.id)
         }
 
         return view

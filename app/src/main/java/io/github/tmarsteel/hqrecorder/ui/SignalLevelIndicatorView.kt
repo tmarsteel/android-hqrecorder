@@ -13,6 +13,10 @@ import io.github.tmarsteel.hqrecorder.util.getSampleLevelAsDecibelText
 import kotlin.math.absoluteValue
 
 class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
+    var indicatesTrackId: Long? = null
+    /** false = left, true = true */
+    var indicatesLeftOrRight: Boolean = false
+
     private var measuredTextChannelIndicator: MeasuredText = MeasuredText.Builder(charArrayOf())
         .build()
     private var measuredTextPeakSignalLevel: MeasuredText = measuredTextChannelIndicator
@@ -143,14 +147,20 @@ class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : 
     }
 
     fun update(maxSampleOfBatch: Float) {
+        if (sampleValue == maxSampleOfBatch) {
+            return
+        }
+
         sampleValue = maxSampleOfBatch
         peakSample = peakSample.coerceAtLeast(maxSampleOfBatch)
         clipIndicator = clipIndicator || peakSample.absoluteValue == Float.MAX_VALUE
+        postInvalidate()
     }
 
     fun reset() {
         sampleValue = 0.0f
         peakSample = 0.0f
         clipIndicator = false
+        postInvalidate()
     }
 }

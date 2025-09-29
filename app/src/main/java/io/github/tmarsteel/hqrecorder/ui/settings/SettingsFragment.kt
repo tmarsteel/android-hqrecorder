@@ -24,8 +24,9 @@ import io.github.tmarsteel.hqrecorder.recording.RecordingConfig
 import io.github.tmarsteel.hqrecorder.recording.RecordingStatusServiceMessage
 import io.github.tmarsteel.hqrecorder.ui.ListeningStatusSubscriber
 import io.github.tmarsteel.hqrecorder.ui.RecordingConfigViewModel
+import io.github.tmarsteel.hqrecorder.ui.SignalLevelIndicatorView
 import io.github.tmarsteel.hqrecorder.ui.StringSpinnerAdapter
-import java.nio.channels.Channels
+import io.github.tmarsteel.hqrecorder.util.allViewsInTree
 import java.text.DecimalFormat
 
 class SettingsFragment : Fragment(),
@@ -223,12 +224,24 @@ class SettingsFragment : Fragment(),
     }
 
     override fun onListeningStarted() {
-        // TODO: reset all the level indicators
+        view?.allViewsInTree
+            ?.filterIsInstance<SignalLevelIndicatorView>()
+            ?.forEach { it.reset() }
     }
 
     override fun onStatusUpdate(update: RecordingStatusServiceMessage) {
-        Log.i(javaClass.name, "received status $update")
-        // TODO: show in the level indicators
+        view?.allViewsInTree
+            ?.filterIsInstance<SignalLevelIndicatorView>()
+            ?.filter { it.indicatesTrackId != null }
+            ?.forEach { indicator ->
+                val trackLevels = update.trackLevels[indicator.indicatesTrackId!!]
+                if (trackLevels == null) {
+                    indicator.reset()
+                } else {
+                    val level = if (indicator.indicatesLeftOrRight) trackLevels.first else (trackLevels.second ?: 0.0f)
+                    indicator.update(level)
+                }
+            }
     }
 
     override fun onListeningStopped() {

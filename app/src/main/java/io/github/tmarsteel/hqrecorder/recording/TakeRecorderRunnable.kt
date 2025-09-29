@@ -59,12 +59,13 @@ class TakeRecorderRunnable(
             ?: throw RuntimeException("Unsupported recording ${audioRecord.format.encoding}, shouldn't have been queued.")
         val trackStates = initializeTrackListeningStates()
 
-        Log.i(javaClass.name, "Starting take")
+        Log.i(javaClass.name, "Starting to listen")
         try {
             listenLoop@while (true) {
                 buffer.clear()
                 val readResult = audioRecord.read(buffer, buffer.capacity(), AudioRecord.READ_NON_BLOCKING)
                 if (readResult < 0) {
+                    Log.e(javaClass.name, "Failed to read from ${AudioRecord::class.simpleName}: $readResult")
                     result = Result.ERROR
                     return
                 }
@@ -74,7 +75,7 @@ class TakeRecorderRunnable(
                 val timeInBuffer = (framesInBuffer * 1000 / audioRecord.format.sampleRate).milliseconds
                 trackStates.forEach { it.resetStatusAccumulator() }
                 val timeSpentWriting = measureTime {
-                    while (buffer.remaining() > 0) {
+                    bufferProcessingLoop@while (buffer.remaining() > 0) {
                         check(buffer.remaining() % frameSizeInBytes == 0)
                         for (trackState in trackStates) {
                             trackState.useDataFromFrame(buffer, sampleSizeInBytes)
@@ -82,7 +83,7 @@ class TakeRecorderRunnable(
                         if (buffer.position() + frameSizeInBytes < buffer.limit()) {
                             buffer.position(buffer.position() + frameSizeInBytes)
                         } else {
-                            break
+                            break@bufferProcessingLoop
                         }
                     }
                 }
