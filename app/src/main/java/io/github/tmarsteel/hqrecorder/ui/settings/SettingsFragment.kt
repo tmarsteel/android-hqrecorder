@@ -234,11 +234,8 @@ class SettingsFragment : Fragment(),
             ?.filterIsInstance<SignalLevelIndicatorView>()
             ?.filter { it.indicatesTrackId != null }
             ?.forEach { indicator ->
-                val trackLevels = update.trackLevels[indicator.indicatesTrackId!!]
-                if (trackLevels == null) {
-                    indicator.reset()
-                } else {
-                    val level = if (indicator.indicatesLeftOrRight) trackLevels.first else (trackLevels.second ?: 0.0f)
+                update.trackLevels[indicator.indicatesTrackId!!]?.let { trackLevels ->
+                    val level = if (indicator.indicatesLeftOrRight) (trackLevels.second ?: 0.0f) else trackLevels.first
                     indicator.update(level)
                 }
             }
