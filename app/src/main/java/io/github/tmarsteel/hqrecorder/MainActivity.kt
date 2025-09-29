@@ -1,17 +1,22 @@
 package io.github.tmarsteel.hqrecorder
 
+import android.Manifest
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.Message
 import android.os.Messenger
+import android.util.Log
+import android.widget.Toast
 import androidx.activity.viewModels
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.setupActionBarWithNavController
@@ -23,6 +28,7 @@ import io.github.tmarsteel.hqrecorder.recording.StartOrStopListeningCommand
 import io.github.tmarsteel.hqrecorder.recording.UpdateRecordingConfigCommand
 import io.github.tmarsteel.hqrecorder.ui.ListeningStatusSubscriber
 import io.github.tmarsteel.hqrecorder.ui.RecordingConfigViewModel
+import io.github.tmarsteel.hqrecorder.ui.record.RecordFragment.Companion.TAG
 import kotlin.getValue
 
 class MainActivity : AppCompatActivity() {
@@ -89,15 +95,30 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onStart() {
-        super.onStart()
-
+    private fun bindRecordingService() {
         val recordingServiceIntent = Intent(this, RecordingService::class.java)
         bindService(
             recordingServiceIntent,
             recordingServiceConnection,
             BIND_AUTO_CREATE,
         )
+    }
+
+    override fun onStart() {
+        super.onStart()
+
+        if (ActivityCompat.checkSelfPermission(
+                applicationContext,
+                Manifest.permission.RECORD_AUDIO
+            ) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(
+                arrayOf("android.permission.RECORD_AUDIO"),
+                REQUEST_CODE_PERMISSION_RECORD_AUDIO_ON_NEXT_TAKE,
+            )
+            return
+        }
+
+        bindRecordingService()
     }
 
     fun registerListeningSubscriber(sub: ListeningStatusSubscriber) {
@@ -134,9 +155,48 @@ class MainActivity : AppCompatActivity() {
         check(this::recordingServiceResponseChannelMessenger.isInitialized)
         check(recordingConfigViewModel.config.isInitialized)
 
+        if (ActivityCompat.checkSelfPermission(
+                applicationContext,
+                Manifest.permission.RECORD_AUDIO
+            ) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(
+                arrayOf("android.permission.RECORD_AUDIO"),
+                REQUEST_CODE_PERMISSION_RECORD_AUDIO_ON_NEXT_TAKE,
+            )
+            return
+        }
+
         val listenCommand = StartOrStopListeningCommand.buildMessage(start = true, statusSubscription = true)
         listenCommand.replyTo = recordingServiceResponseChannelMessenger
         recordingServiceMessenger!!.send(listenCommand)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
+        when (requestCode) {
+            REQUEST_CODE_PERMISSION_RECORD_AUDIO_ON_NEXT_TAKE -> {
+                assert(permissions.single() == "android.permission.RECORD_AUDIO")
+                when (grantResults.single()) {
+                    PackageManager.PERMISSION_GRANTED -> {
+                        Log.i(TAG, "Got microphone permission")
+                        bindRecordingService()
+                        tryStartListening()
+                    }
+                    PackageManager.PERMISSION_DENIED -> {
+                        Log.i(TAG, "Microphone permission was denied")
+                        Toast.makeText(this, R.string.record_no_permission, Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+            else -> {
+                Log.e(TAG, "Unknown request code in onRequestPermissionsResult: $requestCode")
+            }
+        }
     }
 
     private fun tryStopListening() {
@@ -187,5 +247,9 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    companion object {
+        const val REQUEST_CODE_PERMISSION_RECORD_AUDIO_ON_NEXT_TAKE: Int = 1
     }
 }
