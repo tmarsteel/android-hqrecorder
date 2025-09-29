@@ -9,6 +9,7 @@ import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.View
 import io.github.tmarsteel.hqrecorder.R
+import io.github.tmarsteel.hqrecorder.util.getRelationToInDecibels
 import io.github.tmarsteel.hqrecorder.util.getSampleLevelAsDecibelText
 import kotlin.math.absoluteValue
 
@@ -67,6 +68,8 @@ class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : 
             }
         }
 
+    var minVolumeInDecibels: Float = -80.0f
+
     private var tmpRect = Rect()
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -122,7 +125,8 @@ class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : 
 
         val levelTextWidth = measuredTextLongestLevelText.getWidth(0, 4) + threeSp * 2
 
-        val nPixelsForLevel = ((sampleValue / Float.MAX_VALUE) * canvasWidth - levelTextWidth).toInt()
+        val sampleDecibels = sampleValue.getRelationToInDecibels(Float.MAX_VALUE).coerceAtLeast(minVolumeInDecibels)
+        val nPixelsForLevel = ((1.0f - sampleDecibels / minVolumeInDecibels) * canvasWidth.toFloat() - levelTextWidth).toInt()
         tmpRect.set(tmpRect.left, tmpRect.top, tmpRect.left + nPixelsForLevel, tmpRect.bottom)
         canvas.drawRect(tmpRect, paintLevel)
 

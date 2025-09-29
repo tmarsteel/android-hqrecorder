@@ -3,7 +3,6 @@ package io.github.tmarsteel.hqrecorder.util
 import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioRecord
-import io.github.tmarsteel.hqrecorder.ui.settings.AudioDeviceWithChannelMask
 import java.nio.FloatBuffer
 import java.text.DecimalFormat
 import java.util.concurrent.atomic.AtomicReference
@@ -101,15 +100,17 @@ private val decibelNumberFormat = (DecimalFormat.getNumberInstance() as DecimalF
     it.applyPattern("#.#dB")
 }
 fun getSampleLevelAsDecibelText(sample: Float): String {
-    val absSample = sample.absoluteValue
-    if (absSample <= 0.0f) {
+    val decibels = sample.absoluteValue.getRelationToInDecibels(Float.MAX_VALUE)
+    if (decibels == Float.NEGATIVE_INFINITY) {
         return "-inf"
     }
-    if (absSample == Float.MAX_VALUE) {
-        return "-0dB"
+    if (decibels == 0.0f) {
+        return "-0.0dB"
     }
 
-    val level = log10(absSample.toDouble() / Float.MAX_VALUE.toDouble()) * 10.0
-    return decibelNumberFormat.format(level)
-    // 3.3525738E38
+    return decibelNumberFormat.format(decibels)
+}
+
+fun Float.getRelationToInDecibels(other: Float): Float {
+    return (log10(toDouble() / other.toDouble()) * 10.0).toFloat()
 }
