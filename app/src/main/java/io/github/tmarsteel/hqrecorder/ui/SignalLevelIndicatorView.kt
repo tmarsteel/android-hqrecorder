@@ -123,14 +123,14 @@ class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : 
         val canvasWidth = tmpRect.width()
         val canvasHeight = tmpRect.height()
 
-        val levelTextWidth = measuredTextLongestLevelText.getWidth(0, 4) + threeSp * 2
+        val peakLevelTextWidth = measuredTextLongestLevelText.getWidth(0, 8) + threeSp * 2
 
         val sampleDecibels = sampleValue.getRelationToInDecibels(Float.MAX_VALUE).coerceAtLeast(minVolumeInDecibels)
-        val nPixelsForLevel = ((1.0f - sampleDecibels / minVolumeInDecibels) * canvasWidth.toFloat() - levelTextWidth).toInt()
+        val nPixelsForLevel = ((1.0f - sampleDecibels / minVolumeInDecibels) * canvasWidth.toFloat() - peakLevelTextWidth).toInt()
         tmpRect.set(tmpRect.left, tmpRect.top, tmpRect.left + nPixelsForLevel, tmpRect.bottom)
         canvas.drawRect(tmpRect, paintLevel)
 
-        tmpRect.set((canvasWidth - levelTextWidth).toInt(), 0, canvasWidth, canvasHeight)
+        tmpRect.set((canvasWidth - peakLevelTextWidth).toInt(), 0, canvasWidth, canvasHeight)
         canvas.drawRect(tmpRect, levelTextBackgroundPaint)
 
         measuredTextPeakSignalLevel.getBounds(0, peakSignalLevelText.length, tmpRect)
