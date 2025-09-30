@@ -24,4 +24,13 @@
     <string name="notification_record_ready">Ready to record.</string>
 
     <string name="error_no_audio_manager">Couldn\'t access the AudioManager API</string>
+
+    <string name="toast_take_saved">Take saved.</string>
+    <string name="toast_cant_listen_invalid_config">Failed to start recording, check the settings</string>
+    <string name="toast_cant_listen_still_recording">Can\'t change the configuration, stop the recording first.</string>
+    <string name="toast_cant_listen_no_mic_permission">You must grant the app permission to access the microphone.</string>
+    <string name="toast_cant_listen_no_config">Can\'t access audio data, check the settings.</string>
+    <string name="toast_cant_listen_device_not_available">Can\'t access the selected device. Check the system settings, android probably forces the use of a specific audio device.</string>
+    <string name="toast_cant_confgiure_invalid">This configuration seems not to work, sorry.</string>
+    <string name="toast_cant_confgiure_still_recording">Stop the recording before applying new settings.</string>
 </resources>

@@ -22,8 +22,10 @@ import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.setupActionBarWithNavController
 import androidx.navigation.ui.setupWithNavController
 import io.github.tmarsteel.hqrecorder.databinding.ActivityMainBinding
+import io.github.tmarsteel.hqrecorder.recording.FinishTakeCommand
 import io.github.tmarsteel.hqrecorder.recording.RecordingService
 import io.github.tmarsteel.hqrecorder.recording.RecordingStatusServiceMessage
+import io.github.tmarsteel.hqrecorder.recording.StartNewTakeCommand
 import io.github.tmarsteel.hqrecorder.recording.StartOrStopListeningCommand
 import io.github.tmarsteel.hqrecorder.recording.UpdateRecordingConfigCommand
 import io.github.tmarsteel.hqrecorder.ui.ListeningStatusSubscriber
@@ -223,6 +225,55 @@ class MainActivity : AppCompatActivity() {
     private inner class ServiceIncomingHandler(looper: Looper) : Handler(looper) {
         override fun handleMessage(msg: Message) {
             when (msg.what) {
+                FinishTakeCommand.Response.WHAT_VALUE -> {
+                    Toast.makeText(this@MainActivity, R.string.toast_take_saved, Toast.LENGTH_LONG).show()
+                }
+                StartNewTakeCommand.Response.WHAT_VALUE -> {
+                    val response = StartNewTakeCommand.Response.fromMessage(msg)!!
+                    when (response.result) {
+                        StartNewTakeCommand.Response.Result.INVALID_STATE -> {
+                            Toast.makeText(this@MainActivity, R.string.toast_cant_listen_invalid_config, Toast.LENGTH_LONG).show()
+                        }
+                        StartNewTakeCommand.Response.Result.RECORDING -> {
+                            // nothing to do, as requested
+                        }
+                    }
+                }
+                StartOrStopListeningCommand.Response.WHAT_VALUE -> {
+                    val response = StartOrStopListeningCommand.Response.fromMessage(msg)!!
+                    when (response.result) {
+                        StartOrStopListeningCommand.Response.Result.STILL_RECORDING -> {
+                            Toast.makeText(this@MainActivity, R.string.toast_cant_listen_still_recording, Toast.LENGTH_LONG).show()
+                        }
+                        StartOrStopListeningCommand.Response.Result.NO_PERMISSION -> {
+                            Toast.makeText(this@MainActivity, R.string.toast_cant_listen_no_mic_permission, Toast.LENGTH_LONG).show()
+                        }
+                        StartOrStopListeningCommand.Response.Result.NOT_CONFIGURED -> {
+                            Toast.makeText(this@MainActivity, R.string.toast_cant_listen_no_config, Toast.LENGTH_LONG).show()
+                        }
+                        StartOrStopListeningCommand.Response.Result.DEVICE_NOT_AVAILABLE -> {
+                            Toast.makeText(this@MainActivity, R.string.toast_cant_listen_device_not_available, Toast.LENGTH_LONG).show()
+                        }
+                        StartOrStopListeningCommand.Response.Result.LISTENING,
+                        StartOrStopListeningCommand.Response.Result.NOT_LISTENING -> {
+                            // nothing to do, as requested
+                        }
+                    }
+                }
+                UpdateRecordingConfigCommand.Response.WHAT_VALUE -> {
+                    val response = UpdateRecordingConfigCommand.Response.fromMessage(msg)!!
+                    when (response.result) {
+                        UpdateRecordingConfigCommand.Response.Result.STOP_RECORDING_FIRST -> {
+                            Toast.makeText(this@MainActivity, R.string.toast_cant_confgiure_still_recording, Toast.LENGTH_LONG).show()
+                        }
+                        UpdateRecordingConfigCommand.Response.Result.INVALID -> {
+                            Toast.makeText(this@MainActivity, R.string.toast_cant_confgiure_invalid, Toast.LENGTH_LONG).show()
+                        }
+                        UpdateRecordingConfigCommand.Response.Result.OK -> {
+                            // nothing to do, as requested
+                        }
+                    }
+                }
                 RecordingStatusServiceMessage.WHAT_VALUE -> {
                     val message = RecordingStatusServiceMessage.fromMessage(msg)!!
                     if (message.isListening) {
