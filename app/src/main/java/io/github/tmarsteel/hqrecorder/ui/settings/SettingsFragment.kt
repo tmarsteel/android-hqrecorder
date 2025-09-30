@@ -5,7 +5,6 @@ import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.os.Bundle
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -27,6 +26,7 @@ import io.github.tmarsteel.hqrecorder.ui.RecordingConfigViewModel
 import io.github.tmarsteel.hqrecorder.ui.SignalLevelIndicatorView
 import io.github.tmarsteel.hqrecorder.ui.StringSpinnerAdapter
 import io.github.tmarsteel.hqrecorder.util.allViewsInTree
+import io.github.tmarsteel.hqrecorder.util.setSelectedItemByPredicate
 import java.text.DecimalFormat
 
 class SettingsFragment : Fragment(),
@@ -45,15 +45,45 @@ class SettingsFragment : Fragment(),
     private lateinit var trackConfigAdapter: TrackConfigAdapter
 
     private val recordingConfigViewModel: RecordingConfigViewModel by activityViewModels()
-
-    private var recordingConfig = RecordingConfig(
-        "",
-        0,
-        ChannelMask.EMPTY,
-        44100,
-        AudioFormat.ENCODING_PCM_16BIT,
-        emptyList(),
-    )
+    private fun updateRecordingConfig(
+        deviceId: Int = (recordingConfigViewModel.config.value ?: RecordingConfig.INITIAL).deviceId,
+        deviceAddress: String = (recordingConfigViewModel.config.value ?: RecordingConfig.INITIAL).deviceAddress,
+        samplingRate: Int = (recordingConfigViewModel.config.value ?: RecordingConfig.INITIAL).samplingRate,
+        encoding: Int = (recordingConfigViewModel.config.value ?: RecordingConfig.INITIAL).encoding,
+        channelMask: ChannelMask = (recordingConfigViewModel.config.value ?: RecordingConfig.INITIAL).channelMask,
+    ) {
+        val tracks = recordingConfigViewModel.config.value?.tracks ?: emptyList()
+        recordingConfigViewModel.config.value = RecordingConfig(
+            deviceAddress,
+            deviceId,
+            channelMask,
+            samplingRate,
+            encoding,
+            tracks,
+        )
+    }
+    private fun addTrackToViewModel(track: RecordingConfig.InputTrackConfig) {
+        val old = recordingConfigViewModel.config.value ?: RecordingConfig.INITIAL
+        recordingConfigViewModel.config.value = old.copy(
+            tracks = old.tracks + track
+        )
+    }
+    private fun updateTracksInViewModel(mapper: (RecordingConfig.InputTrackConfig) -> RecordingConfig.InputTrackConfig?) {
+        val old = recordingConfigViewModel.config.value ?: RecordingConfig.INITIAL
+        val newTracks = old.tracks.toMutableList()
+        val newTracksIt = newTracks.listIterator()
+        while (newTracksIt.hasNext()) {
+            val newTrack = newTracksIt.next().let(mapper)
+            if (newTrack == null) {
+                newTracksIt.remove()
+            } else {
+                newTracksIt.set(newTrack)
+            }
+        }
+        recordingConfigViewModel.config.value = old.copy(
+            tracks = newTracks
+        )
+    }
 
     private var viewCreated = false
     override fun onCreateView(
@@ -78,12 +108,12 @@ class SettingsFragment : Fragment(),
             it.add(48000)
         }
         binding.settingsSamplingRateSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                updateConfigInViewModel()
+            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
+                updateRecordingConfig(samplingRate = parent.adapter.getItem(position) as Int)
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) {
-                updateConfigInViewModel()
+                updateRecordingConfig(samplingRate = 0)
             }
         }
         binding.settingsBitDepthSpinner.adapter = StringSpinnerAdapter<BitDepth>(
@@ -93,22 +123,13 @@ class SettingsFragment : Fragment(),
         ).also {
             it.addAll(*enumValues<BitDepth>())
         }
-        binding.settingsSamplingRateSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                updateConfigInViewModel()
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>?) {
-                updateConfigInViewModel()
-            }
-        }
         binding.settingsBitDepthSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                updateConfigInViewModel()
+            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
+                updateRecordingConfig(encoding = (parent.adapter.getItem(position) as BitDepth).encodingValue)
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) {
-                updateConfigInViewModel()
+                updateRecordingConfig(encoding = AudioFormat.ENCODING_PCM_16BIT)
             }
         }
         binding.settingsBitDepthSpinner.setSelection(enumValues<BitDepth>().indexOf(BitDepth.FOUR_BYTES_INTEGER))
@@ -138,11 +159,12 @@ class SettingsFragment : Fragment(),
                     .sortedBy { it.ordinal }
                     .forEach { bitDepthsAdapter.add(it) }
 
-                recordingConfig.deviceId = deviceWithMask.device.id
-                recordingConfig.deviceAddress = deviceWithMask.device.address
-                recordingConfig.channelMask = deviceWithMask.channelMask
                 trackConfigAdapter.channelMask = deviceWithMask.channelMask
-                updateConfigInViewModel()
+                updateRecordingConfig(
+                    deviceId = deviceWithMask.device.id,
+                    deviceAddress = deviceWithMask.device.address,
+                    channelMask = deviceWithMask.channelMask,
+                )
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) {
@@ -157,37 +179,50 @@ class SettingsFragment : Fragment(),
         binding.settingsAddStereoTrack.setOnClickListener(this::addStereoTrack)
         trackConfigAdapter = TrackConfigAdapter(requireContext())
         binding.settingsTracksList.adapter = trackConfigAdapter
-        trackConfigAdapter.clear()
-        trackConfigAdapter.addAll(recordingConfig.tracks)
         trackConfigAdapter.trackConfigChangedListener = this
 
         viewCreated = true
 
+        recordingConfigViewModel.config.observe(viewLifecycleOwner) { newConfig ->
+            binding.settingsAudioDeviceSpinner.setSelectedItemByPredicate<AudioDeviceWithChannelMask> { deviceOption ->
+                deviceOption.device.id == newConfig.deviceId && deviceOption.device.address == newConfig.deviceAddress
+            }
+            val selectedDevice = binding.settingsAudioDeviceSpinner.selectedItem as AudioDeviceWithChannelMask?
+            binding.settingsSamplingRateSpinner.setSelectedItemByPredicate<Int> { it == newConfig.samplingRate }
+            binding.settingsBitDepthSpinner.setSelectedItemByPredicate<BitDepth> { it.encodingValue == newConfig.encoding }
+            (binding.settingsTracksList.adapter as ArrayAdapter<RecordingConfig.InputTrackConfig>).also {
+                it.clear()
+                it.addAll(newConfig.tracks)
+            }
+            nextTrackId = newConfig.tracks.maxOfOrNull { it.id } ?: 0
+            nextTrackFirstChannel = (selectedDevice?.channelMask?.channels ?: Channel.all)
+                .filter { it !in newConfig.tracks.flatMap { listOfNotNull(it.leftOrMonoDeviceChannel, it.rightDeviceChannel) } }
+                .firstOrNull()
+                ?: selectedDevice?.channelMask?.channels?.firstOrNull()
+                ?: Channel.FIRST
+
+            if (newConfig.tracks.any()) {
+                (requireActivity() as MainActivity).registerListeningSubscriber(this)
+            } else {
+                (requireActivity() as MainActivity).unregisterListeningSubscriber(this)
+            }
+        }
+
         return root
     }
 
-    private val nextTrackId: Long get() = (recordingConfig.tracks.maxOfOrNull { it.id } ?: -1L) + 1
+    private var nextTrackId: Long = 0
+    private var nextTrackFirstChannel: Channel = Channel.FIRST
 
     fun addMonoTrack(button: View?) {
         val id = nextTrackId
-        val channel = (selectedDeviceWithMask?.channelMask?.channels ?: Channel.all)
-            .filter { it !in recordingConfig.tracks.flatMap { listOfNotNull(it.leftOrMonoDeviceChannel, it.rightDeviceChannel) } }
-            .firstOrNull()
-            ?: selectedDeviceWithMask?.channelMask?.channels?.firstOrNull()
-            ?: Channel.FIRST
-        val track = RecordingConfig.InputTrackConfig(id, "Track ${id + 1}", channel, null)
-        recordingConfig.tracks = recordingConfig.tracks + track
-        trackConfigAdapter.add(track)
-        updateConfigInViewModel()
+        val track = RecordingConfig.InputTrackConfig(id, "Track ${id + 1}", nextTrackFirstChannel, null)
+        addTrackToViewModel(track)
     }
 
     fun addStereoTrack(button: View?) {
         val id = nextTrackId
-        val leftChannel = (selectedDeviceWithMask?.channelMask?.channels ?: Channel.all)
-            .filter { it !in recordingConfig.tracks.flatMap { listOfNotNull(it.leftOrMonoDeviceChannel, it.rightDeviceChannel) } }
-            .firstOrNull()
-            ?: selectedDeviceWithMask?.channelMask?.channels?.firstOrNull()
-            ?: Channel.FIRST
+        val leftChannel = nextTrackFirstChannel
         val potentialRightChannel = try {
             Channel(leftChannel.number + 1)
         } catch (_: IllegalArgumentException) {
@@ -195,31 +230,18 @@ class SettingsFragment : Fragment(),
         }
         val rightChannel = potentialRightChannel.takeIf { it in (selectedDeviceWithMask?.channelMask?.channels ?: Channel.all) } ?: leftChannel
         val track = RecordingConfig.InputTrackConfig(id, "Track ${id + 1}", leftChannel, rightChannel)
-        recordingConfig.tracks = recordingConfig.tracks + track
-        trackConfigAdapter.add(track)
-        updateConfigInViewModel()
+        addTrackToViewModel(track)
     }
 
-    override fun onTrackConfigChanged(id: Long) {
-        updateConfigInViewModel()
+    override fun onTrackChanged(newTrackData: RecordingConfig.InputTrackConfig) {
+        updateTracksInViewModel { oldTrackData ->
+            if (oldTrackData.id == newTrackData.id) newTrackData else oldTrackData
+        }
     }
 
     override fun onTrackDeleteRequested(id: Long) {
-        val track = recordingConfig.tracks.singleOrNull { it.id == id } ?: return
-        recordingConfig.tracks = recordingConfig.tracks - track
-        trackConfigAdapter.remove(track)
-        updateConfigInViewModel()
-    }
-
-    private fun updateConfigInViewModel() {
-        if (!viewCreated) {
-            return
-        }
-        recordingConfigViewModel.config.value = recordingConfig.copy()
-        if (recordingConfig.tracks.any()) {
-            (requireActivity() as MainActivity).registerListeningSubscriber(this)
-        } else {
-            (requireActivity() as MainActivity).unregisterListeningSubscriber(this)
+        updateTracksInViewModel {
+            if (it.id == id) null else it
         }
     }
 
@@ -227,6 +249,7 @@ class SettingsFragment : Fragment(),
         view?.allViewsInTree
             ?.filterIsInstance<SignalLevelIndicatorView>()
             ?.forEach { it.reset() }
+
     }
 
     override fun onStatusUpdate(update: RecordingStatusServiceMessage) {
@@ -247,6 +270,7 @@ class SettingsFragment : Fragment(),
 
     override fun onDestroyView() {
         super.onDestroyView()
+        (requireActivity() as? MainActivity)?.unregisterListeningSubscriber(this)
         audioManager?.unregisterAudioDeviceCallback(audioDeviceCallback)
         _binding = null
     }

@@ -38,6 +38,7 @@ class RecordingService : Service() {
     }
 
     override fun onCreate() {
+        Log.i(javaClass.name, "onCreate")
         val channel = NotificationChannel(NOTIFICATION_CHANNEL_RECORDING_SERVICE, NOTIFICATION_CHANNEL_RECORDING_SERVICE, NotificationManager.IMPORTANCE_NONE).also {
             it.description = "Notification for the recording background task"
         }
@@ -51,11 +52,12 @@ class RecordingService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.i(javaClass.name, "onStartCommand")
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
-
+        Log.i(javaClass.name, "onDestroy")
     }
 
     private var state: State = Initial()
@@ -66,21 +68,25 @@ class RecordingService : Service() {
                 UpdateRecordingConfigCommand.WHAT_VALUE -> {
                     val command = UpdateRecordingConfigCommand.fromMessage(msg)!!
                     val response = state.updateRecordingConfig(command.config)
+                    Log.i(javaClass.name, "command = $command, response = $response")
                     msg.replyTo?.send(UpdateRecordingConfigCommand.Response.buildMessage(response))
                 }
                 StartOrStopListeningCommand.WHAT_VALUE -> {
                     val command = StartOrStopListeningCommand.fromMessage(msg)!!
                     val response = state.startOrStopListening(command, msg.replyTo)
+                    Log.i(javaClass.name, "command = $command, response = $response")
                     msg.replyTo?.send(StartOrStopListeningCommand.Response.buildMessage(response))
                 }
                 StartNewTakeCommand.WHAT_VALUE -> {
                     val command = StartNewTakeCommand.fromMessage(msg)!!
                     val response = state.startNewTake()
+                    Log.i(javaClass.name, "command = $command, response = $response")
                     msg.replyTo?.send(StartNewTakeCommand.Response.buildMessage(response))
                 }
                 FinishTakeCommand.WHAT_VALUE -> {
                     val command = FinishTakeCommand.fromMessage(msg)!!
                     val response = state.finishTake()
+                    Log.i(javaClass.name, "command = $command, response = $response")
                     msg.replyTo?.send(FinishTakeCommand.buildMessage())
                 }
                 else -> {
@@ -252,9 +258,34 @@ class RecordingService : Service() {
         }
 
         override fun updateRecordingConfig(config: RecordingConfig): UpdateRecordingConfigCommand.Response {
-            return UpdateRecordingConfigCommand.Response(
-                UpdateRecordingConfigCommand.Response.Result.STOP_RECORDING_FIRST
-            )
+            if (listeningThread.isAlive && listeningRunnable.isRecording) {
+                return UpdateRecordingConfigCommand.Response(
+                    UpdateRecordingConfigCommand.Response.Result.STOP_RECORDING_FIRST
+                )
+            }
+
+            internalStopListening(null)
+            state = configuredState
+            val updatedConfigResponse = state.updateRecordingConfig(config)
+            if (updatedConfigResponse.result == UpdateRecordingConfigCommand.Response.Result.OK) {
+                state.startOrStopListening(StartOrStopListeningCommand(start = true, statusSubscription = false), null)
+            }
+            return updatedConfigResponse
+        }
+
+        private fun internalStopListening(subscriber: Messenger?) {
+            check(!listeningThread.isAlive || !listeningRunnable.isRecording)
+            listeningRunnable.sendCommand(TakeRecorderRunnable.Command.STOP_LISTENING)
+            state = configuredState
+            val finalStatusUpdate = RecordingStatusServiceMessage.buildMessage(RecordingStatusServiceMessage(
+                isListening = false,
+                isRecording = false,
+                loadPercentage = 0u,
+                trackLevels = emptyMap(),
+            ))
+            (statusSubscribers + listOfNotNull(subscriber)).forEach {
+                it.send(finalStatusUpdate)
+            }
         }
 
         override fun startOrStopListening(
@@ -273,41 +304,24 @@ class RecordingService : Service() {
                     StartOrStopListeningCommand.Response.Result.STILL_RECORDING
                 )
             }
-
-            listeningRunnable.sendCommand(TakeRecorderRunnable.Command.STOP_LISTENING)
-            state = configuredState
-            val finalStatusUpdate = RecordingStatusServiceMessage.buildMessage(RecordingStatusServiceMessage(
-                isListening = false,
-                isRecording = false,
-                loadPercentage = 0u,
-                trackLevels = emptyMap(),
-            ))
-            (statusSubscribers + listOfNotNull(subscriber)).forEach {
-                it.send(finalStatusUpdate)
-            }
+            internalStopListening(subscriber)
             return StartOrStopListeningCommand.Response(
                 StartOrStopListeningCommand.Response.Result.NOT_LISTENING
             )
         }
 
         private fun assureTakeFinished(): Boolean {
-            val localThread = listeningThread
-            if (localThread == null || !localThread.isAlive) {
+            if (!listeningThread.isAlive || !listeningRunnable.isRecording) {
                 return false
             }
 
-            val localRunnable = listeningRunnable
-            if (localRunnable == null || !localRunnable.isRecording) {
-                return false
-            }
-
-            listeningRunnable!!.sendCommand(TakeRecorderRunnable.Command.FINISH_TAKE)
+            listeningRunnable.sendCommand(TakeRecorderRunnable.Command.FINISH_TAKE)
             return true
         }
 
         override fun startNewTake(): StartNewTakeCommand.Response {
             assureTakeFinished()
-            listeningRunnable!!.sendCommand(TakeRecorderRunnable.Command.NEXT_TAKE)
+            listeningRunnable.sendCommand(TakeRecorderRunnable.Command.NEXT_TAKE)
             return StartNewTakeCommand.Response(
                 StartNewTakeCommand.Response.Result.RECORDING
             )

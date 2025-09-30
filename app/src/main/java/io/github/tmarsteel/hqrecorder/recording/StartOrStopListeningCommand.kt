@@ -10,7 +10,7 @@ import kotlinx.parcelize.Parcelize
  * though not yet save to disk. The service will start to publish []
  */
 @Parcelize
-class StartOrStopListeningCommand(
+data class StartOrStopListeningCommand(
     /**
      * if true, assures listening is started; if false, assures its stopped
      */

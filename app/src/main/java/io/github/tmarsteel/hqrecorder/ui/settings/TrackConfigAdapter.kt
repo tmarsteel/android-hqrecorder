@@ -37,7 +37,12 @@ class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
         val labelEdit = view.findViewById<EditText>(R.id.settings_track_label)
         labelEdit.setText(track.label)
         labelEdit.setOnEditorActionListener { innerLabelEdit, _ , _ ->
-            track.label = innerLabelEdit.text.toString()
+            trackConfigChangedListener?.let { listener ->
+                val newTrack = (getItem(position) as RecordingConfig.InputTrackConfig).copy(
+                    label = innerLabelEdit.text.toString()
+                )
+                listener.onTrackChanged(newTrack)
+            }
             false
         }
 
@@ -47,7 +52,7 @@ class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
             leftSourceSpinner.adapter = adapter
         }
         leftSourceSpinner.setSelection(channelMask.channels.indexOf(track.leftOrMonoDeviceChannel))
-        leftSourceSpinner.onItemSelectedListener = SourceChannelChangeListener(track.id, LEFT_DEFAULT_CHANNEL, track::leftOrMonoDeviceChannel::set)
+        leftSourceSpinner.onItemSelectedListener = SourceChannelChangeListener(position, false)
         val leftLevel = view.findViewById<SignalLevelIndicatorView>(R.id.settings_track_signal_level_left)
         leftLevel.channelIndicator = if (track.rightDeviceChannel != null) "L" else ""
         leftLevel.indicatesLeftOrRight = false
@@ -72,8 +77,8 @@ class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
                 val adapter = SourceChannelAdapter(parent.context)
                 rightSourceSpinner.adapter = adapter
             }
-            rightSourceSpinner.setSelection(channelMask.channels.indexOf(track.rightDeviceChannel!!))
-            rightSourceSpinner.onItemSelectedListener = SourceChannelChangeListener(track.id, RIGHT_DEFAULT_CHANNEL, track::rightDeviceChannel::set)
+            rightSourceSpinner.setSelection(channelMask.channels.indexOf(track.rightDeviceChannel))
+            rightSourceSpinner.onItemSelectedListener = SourceChannelChangeListener(position, false)
         }
 
         view.findViewById<Button>(R.id.settings_track_delete_button).setOnClickListener {
@@ -95,7 +100,7 @@ class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
         }
 
         override fun getItemId(position: Int): Long {
-            return position.toLong()
+            return channelMask.channels.drop(position).firstOrNull()?.number?.toLong() ?: 0
         }
 
         override fun getView(
@@ -121,25 +126,32 @@ class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
         }
     }
 
-    inner class SourceChannelChangeListener(val trackId: Long, val defaultChannel: Channel, val updateTarget: (Channel)  -> Unit) : AdapterView.OnItemSelectedListener {
+    inner class SourceChannelChangeListener(val trackAdapterPosition: Int, val isRight: Boolean) : AdapterView.OnItemSelectedListener {
         override fun onItemSelected(
             parent: AdapterView<*>,
             view: View?,
             position: Int,
             id: Long
         ) {
-            updateTarget(parent.adapter.getItem(position) as Channel)
-            trackConfigChangedListener?.onTrackConfigChanged(trackId)
+            trackConfigChangedListener?.let { listener ->
+                val track = this@TrackConfigAdapter.getItem(trackAdapterPosition) as RecordingConfig.InputTrackConfig
+                val newChannel = parent.adapter.getItem(position) as Channel
+                val newTrack = if (isRight) {
+                    track.copy(rightDeviceChannel = newChannel)
+                } else {
+                    track.copy(leftOrMonoDeviceChannel = newChannel)
+                }
+                listener.onTrackChanged(newTrack)
+            }
         }
 
         override fun onNothingSelected(parent: AdapterView<*>?) {
-            updateTarget(defaultChannel)
-            trackConfigChangedListener?.onTrackConfigChanged(trackId)
+
         }
     }
 
     interface TrackConfigChangedListener {
-        fun onTrackConfigChanged(id: Long)
+        fun onTrackChanged(newTrackData: RecordingConfig.InputTrackConfig)
         fun onTrackDeleteRequested(id: Long)
     }
 
