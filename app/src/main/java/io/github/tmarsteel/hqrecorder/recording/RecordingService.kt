@@ -195,7 +195,7 @@ class RecordingService : Service() {
             }
 
             audioRecord!!.startRecording()
-            if (audioRecord!!.routedDevice.id != device.id) {
+            if (audioRecord!!.routedDevice?.id != device.id) {
                 audioRecord!!.stop()
                 audioRecord!!.release()
                 audioRecord = null
@@ -244,16 +244,18 @@ class RecordingService : Service() {
             audioRecord.startRecording()
         }
 
-        val listeningRunnable = TakeRecorderRunnable(
-            applicationContext,
-            configuredState.config.tracks,
-            configuredState.channelMask,
-            audioRecord,
-            statusSubscribers,
-        )
-        val listeningThread: Thread = Thread(listeningRunnable)
-
+        val listeningThread: Thread
+        val listeningRunnable: TakeRecorderRunnable
         init {
+            val (thread, runnable) = TakeRecorderRunnable.setUpNewThread(
+                applicationContext,
+                configuredState.config.tracks,
+                configuredState.channelMask,
+                audioRecord,
+                statusSubscribers,
+            )
+            listeningThread = thread
+            listeningRunnable = runnable
             listeningThread.start()
         }
 
@@ -269,13 +271,17 @@ class RecordingService : Service() {
             val updatedConfigResponse = state.updateRecordingConfig(config)
             if (updatedConfigResponse.result == UpdateRecordingConfigCommand.Response.Result.OK) {
                 state.startOrStopListening(StartOrStopListeningCommand(start = true, statusSubscription = false), null)
+                (state as? ListeningAndPossiblyRecording)?.statusSubscribers?.addAll(this.statusSubscribers)
             }
             return updatedConfigResponse
         }
 
         private fun internalStopListening(subscriber: Messenger?) {
-            check(!listeningThread.isAlive || !listeningRunnable.isRecording)
-            listeningRunnable.sendCommand(TakeRecorderRunnable.Command.STOP_LISTENING)
+            if (listeningThread.isAlive) {
+                check(!listeningRunnable.isRecording)
+                listeningRunnable.executeCommandSync(TakeRecorderRunnable.Command.StopListening)
+            }
+
             state = configuredState
             val finalStatusUpdate = RecordingStatusServiceMessage.buildMessage(RecordingStatusServiceMessage(
                 isListening = false,
@@ -315,13 +321,13 @@ class RecordingService : Service() {
                 return false
             }
 
-            listeningRunnable.sendCommand(TakeRecorderRunnable.Command.FINISH_TAKE)
+            listeningRunnable.executeCommandSync(TakeRecorderRunnable.Command.FinishTake)
             return true
         }
 
         override fun startNewTake(): StartNewTakeCommand.Response {
             assureTakeFinished()
-            listeningRunnable.sendCommand(TakeRecorderRunnable.Command.NEXT_TAKE)
+            listeningRunnable.executeCommandSync(TakeRecorderRunnable.Command.NextTake)
             return StartNewTakeCommand.Response(
                 StartNewTakeCommand.Response.Result.RECORDING
             )

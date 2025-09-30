@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Messenger
 import android.provider.MediaStore
 import android.util.Log
+import io.github.tmarsteel.hqrecorder.recording.RecordingConfig
 import io.github.tmarsteel.hqrecorder.recording.TakeRecorderRunnable.Companion.SAMPLE_SIZE_IN_BYTES_BY_ENCODING
 import java.io.Closeable
 import java.io.File
@@ -19,27 +20,28 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatterBuilder
 import java.time.temporal.ChronoField
 import java.util.Locale
-import java.util.concurrent.LinkedBlockingQueue
+import kotlin.collections.List
 import kotlin.math.absoluteValue
 import kotlin.math.max
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.measureTime
 
-class TakeRecorderRunnable(
+class TakeRecorderRunnable private constructor(
     val context: Context,
     val tracks: List<RecordingConfig.InputTrackConfig>,
     val channelMask: ChannelMask,
     val audioRecord: AudioRecord,
     val subscribers: Set<Messenger>,
-    val buffer: ByteBuffer = ByteBuffer.allocateDirect(audioRecord.format.frameSizeInBytes * audioRecord.format.sampleRate),
+    val buffer: ByteBuffer,
 ) : Runnable {
+    @Volatile
+    private lateinit var rcChannel: NonBlockingThreadRemoteControl
+
     private var stopped = false
 
     @Volatile
     var isRecording = false
         private set
-
-    private val commandQueue = LinkedBlockingQueue<Command>()
 
     private fun initializeTrackListeningStates(): List<TrackInListening> {
         val sourceFormat = audioRecord.format
@@ -87,29 +89,36 @@ class TakeRecorderRunnable(
                         }
                     }
                 }
-                val loadPercentage = ((timeSpentWriting / timeInBuffer) * 100).toUInt()
+                val loadPercentage = if (timeInBuffer.isPositive()) {
+                    ((timeSpentWriting / timeInBuffer) * 100.0).toUInt()
+                } else 0u
                 Log.d(javaClass.name, "Processing $timeInBuffer of audio in $timeSpentWriting (ioLoad = $loadPercentage)")
 
-                val nextCommand = commandQueue.poll()
-                if (nextCommand == Command.FINISH_TAKE || (nextCommand == Command.NEXT_TAKE && isRecording)) {
-                    trackStates.forEach {
-                        it.finishTake()
+                var commandNeedsListeningToStop = false
+                rcChannel.processNextCommand { nextCommand ->
+                    if (nextCommand == Command.FinishTake || (nextCommand == Command.NextTake && isRecording)) {
+                        trackStates.forEach {
+                            it.finishTake()
+                        }
+                        isRecording = false
                     }
-                    isRecording = false
+                    if (nextCommand == Command.NextTake) {
+                        isRecording = true
+                        val timestamp = LocalDateTime.now()
+                        trackStates.forEach {
+                            it.startNewTake(timestamp)
+                        }
+                    }
+                    if (nextCommand == Command.StopListening) {
+                        if (isRecording) {
+                            Log.e(javaClass.name, "Cannot stop listening, still recording!!")
+                        } else {
+                            commandNeedsListeningToStop = true
+                        }
+                    }
                 }
-                if (nextCommand == Command.NEXT_TAKE) {
-                    isRecording = true
-                    val timestamp = LocalDateTime.now()
-                    trackStates.forEach {
-                        it.startNewTake(timestamp)
-                    }
-                }
-                if (nextCommand == Command.STOP_LISTENING) {
-                    if (isRecording) {
-                        Log.e(javaClass.name, "Cannot stop listening, still recording!!")
-                    } else {
-                        break@listenLoop
-                    }
+                if (commandNeedsListeningToStop) {
+                    break@listenLoop
                 }
 
                 val statusMessage = RecordingStatusServiceMessage.buildMessage(RecordingStatusServiceMessage(
@@ -127,7 +136,7 @@ class TakeRecorderRunnable(
                     it.send(statusMessage)
                 }
 
-                Thread.sleep(50)
+                Thread.sleep(AUDIO_POLL_DELAY.inWholeMilliseconds)
             }
         }
         catch (e: Throwable) {
@@ -140,9 +149,8 @@ class TakeRecorderRunnable(
         result = Result.SUCCESS
     }
 
-    fun sendCommand(command: Command) {
-        check(!stopped)
-        commandQueue.put(command)
+    fun executeCommandSync(command: Command) {
+        rcChannel.executeCommand(command, AUDIO_POLL_DELAY)
     }
 
     @Volatile
@@ -155,11 +163,10 @@ class TakeRecorderRunnable(
         ;
     }
 
-    enum class Command {
-        NEXT_TAKE,
-        FINISH_TAKE,
-        STOP_LISTENING,
-        ;
+    sealed class Command : NonBlockingThreadRemoteControl.RcCommand<Unit> {
+        object NextTake : Command()
+        object FinishTake : Command()
+        object StopListening : Command()
     }
 
     private data class TrackInListening(
@@ -363,5 +370,32 @@ class TakeRecorderRunnable(
 
         const val MAX_SAMPLE_24BIT_INT = 0x00FFFFFF.toFloat()
         const val MAX_SAMPLE_32BIT_INT = 0xFFFFFFFF.toDouble()
+
+        /**
+         * Delay between two polls to [AudioRecord.read]
+         */
+        val AUDIO_POLL_DELAY = 50.milliseconds
+
+        fun setUpNewThread(
+            context: Context,
+            tracks: List<RecordingConfig.InputTrackConfig>,
+            channelMask: ChannelMask,
+            audioRecord: AudioRecord,
+            subscribers: Set<Messenger>,
+            buffer: ByteBuffer = ByteBuffer.allocateDirect(audioRecord.format.frameSizeInBytes * audioRecord.format.sampleRate),
+            threadName: String = "TakeRecorder"
+        ): Pair<Thread, TakeRecorderRunnable> {
+            val runnable = TakeRecorderRunnable(
+                context,
+                tracks,
+                channelMask,
+                audioRecord,
+                subscribers,
+                buffer,
+            )
+            val thread = Thread(runnable, threadName)
+            runnable.rcChannel = NonBlockingThreadRemoteControl(thread)
+            return Pair(thread, runnable)
+        }
     }
 }
