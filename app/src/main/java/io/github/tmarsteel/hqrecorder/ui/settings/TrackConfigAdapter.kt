@@ -100,6 +100,10 @@ class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
         }
 
         override fun getItemId(position: Int): Long {
+            if (position < 0) {
+                return Long.MIN_VALUE
+            }
+            
             return channelMask.channels.drop(position).firstOrNull()?.number?.toLong() ?: 0
         }
 

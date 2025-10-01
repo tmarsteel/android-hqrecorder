@@ -52,23 +52,35 @@ class SettingsFragment : Fragment(),
         encoding: Int = (recordingConfigViewModel.config.value ?: RecordingConfig.INITIAL).encoding,
         channelMask: ChannelMask = (recordingConfigViewModel.config.value ?: RecordingConfig.INITIAL).channelMask,
     ) {
+        if (creatingView) {
+            return
+        }
+
         val tracks = recordingConfigViewModel.config.value?.tracks ?: emptyList()
-        recordingConfigViewModel.config.value = RecordingConfig(
+        recordingConfigViewModel.config.postValue(RecordingConfig(
             deviceAddress,
             deviceId,
             channelMask,
             samplingRate,
             encoding,
             tracks,
-        )
+        ))
     }
     private fun addTrackToViewModel(track: RecordingConfig.InputTrackConfig) {
+        if (creatingView) {
+            return
+        }
+
         val old = recordingConfigViewModel.config.value ?: RecordingConfig.INITIAL
-        recordingConfigViewModel.config.value = old.copy(
+        recordingConfigViewModel.config.postValue(old.copy(
             tracks = old.tracks + track
-        )
+        ))
     }
     private fun updateTracksInViewModel(mapper: (RecordingConfig.InputTrackConfig) -> RecordingConfig.InputTrackConfig?) {
+        if (creatingView) {
+            return
+        }
+
         val old = recordingConfigViewModel.config.value ?: RecordingConfig.INITIAL
         val newTracks = old.tracks.toMutableList()
         val newTracksIt = newTracks.listIterator()
@@ -80,18 +92,18 @@ class SettingsFragment : Fragment(),
                 newTracksIt.set(newTrack)
             }
         }
-        recordingConfigViewModel.config.value = old.copy(
+        recordingConfigViewModel.config.postValue(old.copy(
             tracks = newTracks
-        )
+        ))
     }
 
-    private var viewCreated = false
+    private var creatingView = false
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        viewCreated = false
+        creatingView = true
         _binding = FragmentSettingsBinding.inflate(inflater, container, false)
         val root: View = binding.root
 
@@ -181,7 +193,7 @@ class SettingsFragment : Fragment(),
         binding.settingsTracksList.adapter = trackConfigAdapter
         trackConfigAdapter.trackConfigChangedListener = this
 
-        viewCreated = true
+        creatingView = false
 
         recordingConfigViewModel.config.observe(viewLifecycleOwner) { newConfig ->
             binding.settingsAudioDeviceSpinner.setSelectedItemByPredicate<AudioDeviceWithChannelMask> { deviceOption ->

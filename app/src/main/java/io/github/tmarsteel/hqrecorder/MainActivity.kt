@@ -86,14 +86,18 @@ class MainActivity : AppCompatActivity() {
         navView.setupWithNavController(navController)
 
         recordingServiceResponseChannelMessenger = Messenger(ServiceIncomingHandler(mainLooper))
-        recordingConfigViewModel.config.observe(this) {
+        recordingConfigViewModel.config.observe(this) { newConfig ->
             if (assumeServiceIsListening) {
                 tryStopListening()
             }
-            recordingServiceMessenger?.send(UpdateRecordingConfigCommand.buildMessage(it))
+            recordingServiceMessenger?.send(UpdateRecordingConfigCommand.buildMessage(newConfig))
             if (listeningSubscribers.isNotEmpty()) {
                 tryStartListening()
             }
+        }
+
+        recordingConfigViewModel.config.observe(this) {
+            Log.i(javaClass.name, "Config in main activity: sampleRate = ${it.samplingRate}")
         }
     }
 
@@ -214,6 +218,7 @@ class MainActivity : AppCompatActivity() {
         val listenCommand = StartOrStopListeningCommand.buildMessage(start = false, statusSubscription = false)
         listenCommand.replyTo = recordingServiceResponseChannelMessenger
         recordingServiceMessenger!!.send(listenCommand)
+        assumeServiceIsListening = false
     }
 
     override fun onStop() {
