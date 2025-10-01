@@ -47,9 +47,8 @@ class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
         }
 
         val leftSourceSpinner = view.findViewById<Spinner>(R.id.settings_track_left_source_spinner)
-        leftSourceSpinner.adapter as? SourceChannelAdapter ?: run {
-            val adapter = SourceChannelAdapter(parent.context)
-            leftSourceSpinner.adapter = adapter
+        if (leftSourceSpinner.adapter !is SourceChannelAdapter) {
+            leftSourceSpinner.adapter = SourceChannelAdapter(parent.context)
         }
         leftSourceSpinner.setSelection(channelMask.channels.indexOf(track.leftOrMonoDeviceChannel))
         leftSourceSpinner.onItemSelectedListener = SourceChannelChangeListener(position, false)
@@ -73,9 +72,8 @@ class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
             rightLevel.indicatesTrackId = track.id
             rightLevel.indicatesLeftOrRight = true
 
-            rightSourceSpinner.adapter as? SourceChannelAdapter ?: run {
-                val adapter = SourceChannelAdapter(parent.context)
-                rightSourceSpinner.adapter = adapter
+            if (rightSourceSpinner.adapter !is SourceChannelAdapter) {
+                rightSourceSpinner.adapter = SourceChannelAdapter(parent.context)
             }
             rightSourceSpinner.setSelection(channelMask.channels.indexOf(track.rightDeviceChannel))
             rightSourceSpinner.onItemSelectedListener = SourceChannelChangeListener(position, false)
@@ -104,7 +102,7 @@ class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
                 return Long.MIN_VALUE
             }
             
-            return channelMask.channels.drop(position).firstOrNull()?.number?.toLong() ?: 0
+            return getItem(position)?.number?.toLong() ?: 0L
         }
 
         override fun getView(
