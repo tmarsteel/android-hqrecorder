@@ -13,6 +13,10 @@ import io.github.tmarsteel.hqrecorder.R
 import io.github.tmarsteel.hqrecorder.util.getRelationToInDecibels
 import io.github.tmarsteel.hqrecorder.util.getSampleLevelAsDecibelText
 import kotlin.math.absoluteValue
+import kotlin.math.ceil
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.nanoseconds
+import kotlin.time.Duration.Companion.seconds
 
 class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
     var indicatesTrackId: Long? = null
@@ -41,7 +45,13 @@ class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : 
     var sampleValue: Float = 0.0f
         set(value) {
             field = value.absoluteValue
-            postInvalidate()
+        }
+
+    var temporaryPeakSampleLastResetAt: Long = System.nanoTime()
+        private set
+    var temporaryPeakSample: Float = 0.0f
+        set(value) {
+            field = value.absoluteValue
         }
 
     var peakSample: Float = 0.0f
@@ -52,8 +62,9 @@ class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : 
             measuredTextPeakSignalLevel = MeasuredText.Builder(textChars)
                 .appendStyleRun(textPaint, textChars.size, false)
                 .build()
-            postInvalidate()
         }
+
+    var temporaryPeakDuration: Duration = 2.seconds
 
     /**
      * true indicates that the signal has clipped
@@ -106,6 +117,7 @@ class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : 
         textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 14.0f, resources.displayMetrics)
     }
     private val threeSp = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 3.0f, resources.displayMetrics)
+    private val twoSpCeiled = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 2.0f, resources.displayMetrics).ceil()
     private val measuredTextLongestLevelText = MeasuredText.Builder("-100.0dB".toCharArray())
         .appendStyleRun(textPaint, 8, false)
         .build()
@@ -126,13 +138,18 @@ class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : 
 
         val peakLevelTextWidth = measuredTextLongestLevelText.getWidth(0, 8) + threeSp * 2
 
-        val sampleDecibels = sampleValue.getRelationToInDecibels(Float.MAX_VALUE).coerceAtLeast(minVolumeInDecibels)
+        val sampleDecibels = sampleValue.getRelationToInDecibels(Float.MAX_VALUE).coerceIn(minVolumeInDecibels, 0.0f)
         val nPixelsForLevel = ((1.0f - sampleDecibels / minVolumeInDecibels) * canvasWidth.toFloat() - peakLevelTextWidth).toInt()
         tmpRect.set(tmpRect.left, tmpRect.top, tmpRect.left + nPixelsForLevel, tmpRect.bottom)
         canvas.drawRect(tmpRect, paintLevel)
 
         tmpRect.set((canvasWidth - peakLevelTextWidth).toInt(), 0, canvasWidth, canvasHeight)
         canvas.drawRect(tmpRect, levelTextBackgroundPaint)
+
+        val temporaryPeakDecibels = temporaryPeakSample.getRelationToInDecibels(Float.MAX_VALUE).coerceIn(minVolumeInDecibels, 0.0f)
+        val horizontalPositionPeakDecibel = ((1.0f - temporaryPeakDecibels / minVolumeInDecibels) * canvasWidth.toFloat() - peakLevelTextWidth).toInt()
+        tmpRect.set(horizontalPositionPeakDecibel, 0, horizontalPositionPeakDecibel + twoSpCeiled, canvasHeight)
+        canvas.drawRect(tmpRect, paintLevel)
 
         measuredTextPeakSignalLevel.getBounds(0, peakSignalLevelText.length, tmpRect)
         canvas.drawText(
@@ -151,20 +168,30 @@ class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : 
         )
     }
 
-    fun update(maxSampleOfBatch: Float) {
-        if (sampleValue == maxSampleOfBatch) {
+    fun update(peakSampleOfBatch: Float) {
+        if (sampleValue == peakSampleOfBatch) {
             return
         }
 
-        sampleValue = maxSampleOfBatch
-        peakSample = peakSample.coerceAtLeast(maxSampleOfBatch)
+        sampleValue = peakSampleOfBatch
+        peakSample = peakSample.coerceAtLeast(peakSampleOfBatch)
         clipIndicator = clipIndicator || peakSample.absoluteValue == Float.MAX_VALUE
+
+        val now = System.nanoTime()
+        val timeSinceLastTempPeakSampleUpdate = (now - temporaryPeakSampleLastResetAt).nanoseconds
+        if (timeSinceLastTempPeakSampleUpdate >= temporaryPeakDuration) {
+            temporaryPeakSample = 0.0f
+            temporaryPeakSampleLastResetAt = now
+        }
+        temporaryPeakSample = temporaryPeakSample.coerceAtLeast(peakSampleOfBatch)
+
         postInvalidate()
     }
 
     fun reset() {
         sampleValue = 0.0f
         peakSample = 0.0f
+        temporaryPeakSample = 0.0f
         clipIndicator = false
         postInvalidate()
     }
@@ -177,4 +204,8 @@ class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : 
         reset()
         return true
     }
+}
+
+private fun Float.ceil(): Int {
+    return ceil(toDouble()).toInt()
 }

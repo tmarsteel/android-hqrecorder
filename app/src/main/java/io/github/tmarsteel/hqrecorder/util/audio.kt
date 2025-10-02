@@ -100,7 +100,7 @@ private val decibelNumberFormat = (DecimalFormat.getNumberInstance() as DecimalF
     it.applyPattern("#.#dB")
 }
 fun getSampleLevelAsDecibelText(sample: Float): String {
-    val decibels = sample.absoluteValue.getRelationToInDecibels(Float.MAX_VALUE)
+    val decibels = sample.absoluteValue.getRelationToInDecibels(Float.MAX_VALUE).coerceAtMost(0.0f)
     if (decibels == Float.NEGATIVE_INFINITY) {
         return "-inf"
     }
