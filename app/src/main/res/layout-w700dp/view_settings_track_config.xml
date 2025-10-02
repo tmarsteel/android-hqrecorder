@@ -10,20 +10,27 @@
         android:inputType="text"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/settings_track_delete_button"
         android:hint="@string/settings_hint_track_label"
+        />
+    <Button
+        android:id="@+id/settings_track_delete_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/settings_track_label"
+        android:contentDescription="@string/settings_hint_track_delete"
+        app:icon="@android:drawable/ic_delete"
+        android:text="@string/settings_hint_track_delete"
+        android:layout_marginStart="@dimen/activity_horizontal_margin"
         />
 
     <LinearLayout
         android:id="@+id/settings_track_left_source_group"
-        android:layout_width="0dp"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         app:layout_constraintTop_toBottomOf="@id/settings_track_label"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintWidth_default="percent"
-        app:layout_constraintWidth_percent=".5"
-        app:layout_constraintHorizontal_bias="0"
         android:orientation="vertical"
         >
         <TextView
@@ -43,11 +50,10 @@
 
     <LinearLayout
         android:id="@+id/settings_track_right_source_group"
-        android:layout_width="0dp"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        app:layout_constraintTop_toTopOf="@id/settings_track_left_source_group"
+        app:layout_constraintTop_toBottomOf="@id/settings_track_label"
         app:layout_constraintStart_toEndOf="@id/settings_track_left_source_group"
-        app:layout_constraintEnd_toEndOf="parent"
         android:orientation="vertical"
         >
         <TextView
@@ -64,16 +70,4 @@
             android:layout_height="wrap_content"
             />
     </LinearLayout>
-
-    <Button
-        android:id="@+id/settings_track_delete_button"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/settings_track_right_source_group"
-        android:contentDescription="@string/settings_hint_track_delete"
-        app:icon="@android:drawable/ic_delete"
-        android:text="@string/settings_hint_track_delete"
-        android:layout_marginStart="@dimen/activity_horizontal_margin"
-        />
 </androidx.constraintlayout.widget.ConstraintLayout>
