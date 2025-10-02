@@ -14,6 +14,10 @@ value class ChannelMask(val mask: Int) : Parcelable, Comparable<ChannelMask> {
     val channels: Sequence<Channel> get()= Channel.all.filter { it in this }
     val count: Int get()= mask.countOneBits()
 
+    operator fun plus(channel: Channel): ChannelMask = ChannelMask(
+        mask + channel.maskForChannel
+    )
+
     override fun toString(): String {
         val hwChannelNumbers = channels.toList().sorted()
         return when (hwChannelNumbers.size) {

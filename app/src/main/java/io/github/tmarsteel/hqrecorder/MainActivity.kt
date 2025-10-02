@@ -39,17 +39,12 @@ class MainActivity : AppCompatActivity() {
 
     private val recordingConfigViewModel: RecordingConfigViewModel by viewModels()
 
-    private var assumeServiceIsListening = false
     private lateinit var recordingServiceResponseChannelMessenger: Messenger
     private var recordingServiceMessenger: Messenger? = null
+    private var assumeServiceIsListening = false
     private val recordingServiceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, service: IBinder) {
             recordingServiceMessenger = Messenger(service)
-            if (listeningSubscribers.isNotEmpty()) {
-                if (recordingConfigViewModel.config.isInitialized) {
-                    tryStartListening()
-                }
-            }
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
@@ -59,6 +54,7 @@ class MainActivity : AppCompatActivity() {
                     it.onListeningStopped()
                 }
             }
+            assumeServiceIsListening = false
         }
     }
 
@@ -86,19 +82,6 @@ class MainActivity : AppCompatActivity() {
         navView.setupWithNavController(navController)
 
         recordingServiceResponseChannelMessenger = Messenger(ServiceIncomingHandler(mainLooper))
-        recordingConfigViewModel.config.observe(this) { newConfig ->
-            if (assumeServiceIsListening) {
-                tryStopListening()
-            }
-            recordingServiceMessenger?.send(UpdateRecordingConfigCommand.buildMessage(newConfig))
-            if (listeningSubscribers.isNotEmpty()) {
-                tryStartListening()
-            }
-        }
-
-        recordingConfigViewModel.config.observe(this) {
-            Log.i(javaClass.name, "Config in main activity: sampleRate = ${it.samplingRate}")
-        }
     }
 
     private fun bindRecordingService() {
@@ -153,13 +136,13 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        if (!recordingConfigViewModel.config.isInitialized) {
+        if (recordingConfigViewModel.config == null) {
             // no config exists yet, will start listening once its set
             return
         }
         check(!assumeServiceIsListening)
         check(this::recordingServiceResponseChannelMessenger.isInitialized)
-        check(recordingConfigViewModel.config.isInitialized)
+        check(recordingConfigViewModel.config != null)
 
         if (ActivityCompat.checkSelfPermission(
                 applicationContext,
@@ -191,7 +174,6 @@ class MainActivity : AppCompatActivity() {
                     PackageManager.PERMISSION_GRANTED -> {
                         Log.i(TAG, "Got microphone permission")
                         bindRecordingService()
-                        tryStartListening()
                     }
                     PackageManager.PERMISSION_DENIED -> {
                         Log.i(TAG, "Microphone permission was denied")

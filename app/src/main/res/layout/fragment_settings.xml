@@ -42,7 +42,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         app:layout_constraintTop_toBottomOf="@id/settings_sampling_rate_label"
-        app:layout_constraintEnd_toStartOf="@id/settings_bit_depth_spinner"
+        app:layout_constraintEnd_toStartOf="@id/settings_sample_encoding_spinner"
         />
 
     <TextView
@@ -51,11 +51,11 @@
         android:layout_height="wrap_content"
         android:text="@string/settings_bit_depth"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="@id/settings_bit_depth_spinner"
+        app:layout_constraintStart_toStartOf="@id/settings_sample_encoding_spinner"
         android:layout_marginStart="@dimen/default_inset"
         />
     <Spinner
-        android:id="@+id/settings_bit_depth_spinner"
+        android:id="@+id/settings_sample_encoding_spinner"
         android:spinnerMode="dropdown"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -68,7 +68,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layoutDirection="locale"
-        app:layout_constraintTop_toBottomOf="@id/settings_bit_depth_spinner"
+        app:layout_constraintTop_toBottomOf="@id/settings_sample_encoding_spinner"
         app:layout_constraintStart_toStartOf="parent"
         android:layout_marginTop="@dimen/activity_vertical_margin"
         >

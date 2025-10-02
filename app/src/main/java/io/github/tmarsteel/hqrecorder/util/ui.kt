@@ -3,6 +3,7 @@ package io.github.tmarsteel.hqrecorder.util
 import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
+import android.widget.ArrayAdapter
 
 val View.allViewsInTree: Sequence<View> get()= sequence {
     yieldAllViewsInTree(this@allViewsInTree)
@@ -24,5 +25,12 @@ fun <T> AdapterView<*>.setSelectedItemByPredicate(predicate: (T) -> Boolean) {
             setSelection(optionIdx)
             return
         }
+    }
+}
+
+fun <T> ArrayAdapter<T>.items(): Sequence<T> = sequence {
+    for (position in 0 until count) {
+        @Suppress("UNCHECKED_CAST")
+        yield(getItem(position) as T)
     }
 }

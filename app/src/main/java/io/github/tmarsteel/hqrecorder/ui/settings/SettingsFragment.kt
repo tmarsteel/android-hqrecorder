@@ -26,13 +26,11 @@ import io.github.tmarsteel.hqrecorder.ui.RecordingConfigViewModel
 import io.github.tmarsteel.hqrecorder.ui.SignalLevelIndicatorView
 import io.github.tmarsteel.hqrecorder.ui.StringSpinnerAdapter
 import io.github.tmarsteel.hqrecorder.util.allViewsInTree
+import io.github.tmarsteel.hqrecorder.util.items
 import io.github.tmarsteel.hqrecorder.util.setSelectedItemByPredicate
 import java.text.DecimalFormat
 
-class SettingsFragment : Fragment(),
-    TrackConfigAdapter.TrackConfigChangedListener,
-        ListeningStatusSubscriber
-{
+class SettingsFragment : Fragment() {
     private var _binding: FragmentSettingsBinding? = null
 
     // This property is only valid between onCreateView and
@@ -42,109 +40,45 @@ class SettingsFragment : Fragment(),
     private var audioManager: AudioManager? = null
     private val selectedDeviceWithMask: AudioDeviceWithChannelMask?
         get() = binding.settingsAudioDeviceSpinner.selectedItem as AudioDeviceWithChannelMask?
-    private lateinit var trackConfigAdapter: TrackConfigAdapter
 
     private val recordingConfigViewModel: RecordingConfigViewModel by activityViewModels()
-    private fun updateRecordingConfig(
-        deviceId: Int = (recordingConfigViewModel.config.value ?: RecordingConfig.INITIAL).deviceId,
-        deviceAddress: String = (recordingConfigViewModel.config.value ?: RecordingConfig.INITIAL).deviceAddress,
-        samplingRate: Int = (recordingConfigViewModel.config.value ?: RecordingConfig.INITIAL).samplingRate,
-        encoding: Int = (recordingConfigViewModel.config.value ?: RecordingConfig.INITIAL).encoding,
-        channelMask: ChannelMask = (recordingConfigViewModel.config.value ?: RecordingConfig.INITIAL).channelMask,
-    ) {
-        if (creatingView) {
-            return
-        }
+    private lateinit var audioDeviceAdapter: StringSpinnerAdapter<AudioDeviceWithChannelMask>
+    private lateinit var samplingRateAdapter: StringSpinnerAdapter<Int>
+    private lateinit var sampleEncodingAdapter: StringSpinnerAdapter<SampleEncoding>
+    private lateinit var trackConfigAdapter: TrackConfigAdapter
 
-        val tracks = recordingConfigViewModel.config.value?.tracks ?: emptyList()
-        recordingConfigViewModel.config.postValue(RecordingConfig(
-            deviceAddress,
-            deviceId,
-            channelMask,
-            samplingRate,
-            encoding,
-            tracks,
-        ))
-    }
-    private fun addTrackToViewModel(track: RecordingConfig.InputTrackConfig) {
-        if (creatingView) {
-            return
-        }
+    override fun onCreate(savedInstanceState: Bundle?) {
+        audioDeviceAdapter = StringSpinnerAdapter(
+            context = requireContext(),
+            idMapper = { _, d -> d.combinedId },
+        )
+        samplingRateAdapter = StringSpinnerAdapter(
+            context = requireContext(),
+            labelGetter = { FREQUENCY_FORMAT.format(it) },
+            idMapper = { _, sr -> sr.toLong() },
+        )
+        sampleEncodingAdapter = StringSpinnerAdapter<SampleEncoding>(
+            context = requireContext(),
+            labelGetter = SampleEncoding::text,
+            idMapper = { _, bd -> bd.encodingValue.toLong() },
+        )
+        trackConfigAdapter = TrackConfigAdapter(requireContext())
 
-        val old = recordingConfigViewModel.config.value ?: RecordingConfig.INITIAL
-        recordingConfigViewModel.config.postValue(old.copy(
-            tracks = old.tracks + track
-        ))
-    }
-    private fun updateTracksInViewModel(mapper: (RecordingConfig.InputTrackConfig) -> RecordingConfig.InputTrackConfig?) {
-        if (creatingView) {
-            return
-        }
-
-        val old = recordingConfigViewModel.config.value ?: RecordingConfig.INITIAL
-        val newTracks = old.tracks.toMutableList()
-        val newTracksIt = newTracks.listIterator()
-        while (newTracksIt.hasNext()) {
-            val newTrack = newTracksIt.next().let(mapper)
-            if (newTrack == null) {
-                newTracksIt.remove()
-            } else {
-                newTracksIt.set(newTrack)
-            }
-        }
-        recordingConfigViewModel.config.postValue(old.copy(
-            tracks = newTracks
-        ))
+        super.onCreate(savedInstanceState)
     }
 
-    private var creatingView = false
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        creatingView = true
         _binding = FragmentSettingsBinding.inflate(inflater, container, false)
         val root: View = binding.root
 
-        binding.settingsAudioDeviceSpinner.adapter = StringSpinnerAdapter<AudioDeviceWithChannelMask>(
-            context = requireContext(),
-            idMapper = { _, d -> d.combinedId },
-        )
-        binding.settingsSamplingRateSpinner.adapter = StringSpinnerAdapter<Int>(
-            context = requireContext(),
-            labelGetter = { FREQUENCY_FORMAT.format(it) },
-            idMapper = { _, sr -> sr.toLong() },
-        ).also {
-            it.add(44100)
-            it.add(48000)
-        }
-        binding.settingsSamplingRateSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
-                updateRecordingConfig(samplingRate = parent.adapter.getItem(position) as Int)
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>?) {
-                updateRecordingConfig(samplingRate = 0)
-            }
-        }
-        binding.settingsBitDepthSpinner.adapter = StringSpinnerAdapter<BitDepth>(
-            context = requireContext(),
-            labelGetter = BitDepth::text,
-            idMapper = { _, bd -> bd.encodingValue.toLong() },
-        ).also {
-            it.addAll(*enumValues<BitDepth>())
-        }
-        binding.settingsBitDepthSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
-                updateRecordingConfig(encoding = (parent.adapter.getItem(position) as BitDepth).encodingValue)
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>?) {
-                updateRecordingConfig(encoding = AudioFormat.ENCODING_PCM_16BIT)
-            }
-        }
-        binding.settingsBitDepthSpinner.setSelection(enumValues<BitDepth>().indexOf(BitDepth.FOUR_BYTES_INTEGER))
+        binding.settingsAudioDeviceSpinner.adapter = audioDeviceAdapter
+        binding.settingsSamplingRateSpinner.adapter = samplingRateAdapter
+        binding.settingsSampleEncodingSpinner.adapter = sampleEncodingAdapter
+        binding.settingsSampleEncodingSpinner.setSelectedItemByPredicate<SampleEncoding> { it  == SampleEncoding.FOUR_BYTES_INTEGER }
 
         audioManager = requireContext().getSystemService<AudioManager>()
             ?: run {
@@ -164,19 +98,14 @@ class SettingsFragment : Fragment(),
                 samplingRatesAdapter.clear()
                 samplingRatesAdapter.addAll(deviceWithMask.device.sampleRates.toList().sorted())
 
-                val bitDepthsAdapter = binding.settingsBitDepthSpinner.adapter as ArrayAdapter<BitDepth>
+                val bitDepthsAdapter = binding.settingsSampleEncodingSpinner.adapter as ArrayAdapter<SampleEncoding>
                 bitDepthsAdapter.clear()
-                enumValues<BitDepth>()
+                enumValues<SampleEncoding>()
                     .filter { it.encodingValue in deviceWithMask.device.encodings }
                     .sortedBy { it.ordinal }
                     .forEach { bitDepthsAdapter.add(it) }
 
                 trackConfigAdapter.channelMask = deviceWithMask.channelMask
-                updateRecordingConfig(
-                    deviceId = deviceWithMask.device.id,
-                    deviceAddress = deviceWithMask.device.address,
-                    channelMask = deviceWithMask.channelMask,
-                )
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) {
@@ -191,45 +120,55 @@ class SettingsFragment : Fragment(),
         binding.settingsAddStereoTrack.setOnClickListener(this::addStereoTrack)
         trackConfigAdapter = TrackConfigAdapter(requireContext())
         binding.settingsTracksList.adapter = trackConfigAdapter
-        trackConfigAdapter.trackConfigChangedListener = this
 
-        creatingView = false
-
-        recordingConfigViewModel.config.observe(viewLifecycleOwner) { newConfig ->
-            binding.settingsAudioDeviceSpinner.setSelectedItemByPredicate<AudioDeviceWithChannelMask> { deviceOption ->
-                deviceOption.device.id == newConfig.deviceId && deviceOption.device.address == newConfig.deviceAddress
-            }
-            val selectedDevice = binding.settingsAudioDeviceSpinner.selectedItem as AudioDeviceWithChannelMask?
-            binding.settingsSamplingRateSpinner.setSelectedItemByPredicate<Int> { it == newConfig.samplingRate }
-            binding.settingsBitDepthSpinner.setSelectedItemByPredicate<BitDepth> { it.encodingValue == newConfig.encoding }
-            (binding.settingsTracksList.adapter as ArrayAdapter<RecordingConfig.InputTrackConfig>).also {
-                it.clear()
-                it.addAll(newConfig.tracks)
-            }
-            nextTrackId = newConfig.tracks.maxOfOrNull { it.id } ?: 0
-            nextTrackFirstChannel = (selectedDevice?.channelMask?.channels ?: Channel.all)
-                .filter { it !in newConfig.tracks.flatMap { listOfNotNull(it.leftOrMonoDeviceChannel, it.rightDeviceChannel) } }
-                .firstOrNull()
-                ?: selectedDevice?.channelMask?.channels?.firstOrNull()
-                ?: Channel.FIRST
-
-            if (newConfig.tracks.any()) {
-                (requireActivity() as MainActivity).registerListeningSubscriber(this)
-            } else {
-                (requireActivity() as MainActivity).unregisterListeningSubscriber(this)
-            }
-        }
+        updateViewWithCurrentViewModel()
 
         return root
     }
 
-    private var nextTrackId: Long = 0
-    private var nextTrackFirstChannel: Channel = Channel.FIRST
+    private fun updateViewWithCurrentViewModel() {
+        recordingConfigViewModel.config?.let { currentConfig ->
+            binding.settingsAudioDeviceSpinner.setSelectedItemByPredicate<AudioDeviceWithChannelMask> { deviceOption ->
+                deviceOption.device.id == currentConfig.deviceId && deviceOption.device.address == currentConfig.deviceAddress
+            }
+            binding.settingsSamplingRateSpinner.setSelectedItemByPredicate<Int> { it == currentConfig.samplingRate }
+            binding.settingsSampleEncodingSpinner.setSelectedItemByPredicate<SampleEncoding> { it.encodingValue == currentConfig.encoding }
+            (binding.settingsAudioDeviceSpinner.selectedItem as AudioDeviceWithChannelMask?)?.let { selectedDeviceWithMask ->
+                trackConfigAdapter.channelMask = selectedDeviceWithMask.channelMask
+            }
+
+            (binding.settingsTracksList.adapter as ArrayAdapter<RecordingConfig.InputTrackConfig>).also {
+                it.clear()
+                it.addAll(currentConfig.tracks)
+            }
+        }
+    }
+
+    private val nextTrackId: Long get()= (trackConfigAdapter.items().maxOfOrNull { it.id } ?: 0L) + 1L
+    private val nextTrackFirstChannel: Channel get() {
+        val channelsInUse = trackConfigAdapter.items()
+            .flatMap {
+                sequenceOf(it.leftOrMonoDeviceChannel, it.rightDeviceChannel).filterNotNull()
+            }
+            .fold(ChannelMask.EMPTY) { mask, channel -> mask + channel }
+
+        val selectedDevice = binding.settingsAudioDeviceSpinner.selectedItem as AudioDeviceWithChannelMask?
+        return selectedDevice
+            .let { it?.channelMask?.channels ?: Channel.all }
+            .filter { it !in channelsInUse }
+            .firstOrNull()
+            ?: selectedDevice?.channelMask?.channels?.firstOrNull()
+            ?: Channel.FIRST
+    }
 
     fun addMonoTrack(button: View?) {
         val id = nextTrackId
-        val track = RecordingConfig.InputTrackConfig(id, "Track ${id + 1}", nextTrackFirstChannel, null)
-        addTrackToViewModel(track)
+        trackConfigAdapter.add(RecordingConfig.InputTrackConfig(
+            id,
+            "Track $id",
+            nextTrackFirstChannel,
+            null,
+        ))
     }
 
     fun addStereoTrack(button: View?) {
@@ -241,76 +180,40 @@ class SettingsFragment : Fragment(),
             leftChannel
         }
         val rightChannel = potentialRightChannel.takeIf { it in (selectedDeviceWithMask?.channelMask?.channels ?: Channel.all) } ?: leftChannel
-        val track = RecordingConfig.InputTrackConfig(id, "Track ${id + 1}", leftChannel, rightChannel)
-        addTrackToViewModel(track)
-    }
-
-    override fun onTrackChanged(newTrackData: RecordingConfig.InputTrackConfig) {
-        updateTracksInViewModel { oldTrackData ->
-            if (oldTrackData.id == newTrackData.id) newTrackData else oldTrackData
-        }
-    }
-
-    override fun onTrackDeleteRequested(id: Long) {
-        updateTracksInViewModel {
-            if (it.id == id) null else it
-        }
-    }
-
-    override fun onListeningStarted() {
-        view?.allViewsInTree
-            ?.filterIsInstance<SignalLevelIndicatorView>()
-            ?.forEach { it.reset() }
-
-    }
-
-    override fun onStatusUpdate(update: RecordingStatusServiceMessage) {
-        view?.allViewsInTree
-            ?.filterIsInstance<SignalLevelIndicatorView>()
-            ?.filter { it.indicatesTrackId != null }
-            ?.forEach { indicator ->
-                update.trackLevels[indicator.indicatesTrackId!!]?.let { trackLevels ->
-                    val level = if (indicator.indicatesLeftOrRight) (trackLevels.second ?: 0.0f) else trackLevels.first
-                    indicator.update(level)
-                }
-            }
-    }
-
-    override fun onListeningStopped() {
-        // TODO: reset all the level indicators, RETAINING THE TRUE PEAK AND CLIP FLAG!!!
+        trackConfigAdapter.add(RecordingConfig.InputTrackConfig(
+            id,
+            "Track $id",
+            leftChannel,
+            rightChannel
+        ))
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
-        (requireActivity() as? MainActivity)?.unregisterListeningSubscriber(this)
         audioManager?.unregisterAudioDeviceCallback(audioDeviceCallback)
         _binding = null
     }
 
     private val audioDeviceCallback = object : AudioDeviceCallback() {
         override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) {
-            val binding = _binding ?: return
-            val adapter = binding.settingsAudioDeviceSpinner.adapter as ArrayAdapter<AudioDeviceWithChannelMask>
             addedDevices.forEach { newDevice ->
                 if (!newDevice.isSource) {
                     return
                 }
                 for (channelMask in ChannelMask.getUniqueMasksFor(newDevice)) {
-                    adapter.add(AudioDeviceWithChannelMask(newDevice, channelMask))
+                    audioDeviceAdapter.add(AudioDeviceWithChannelMask(newDevice, channelMask))
                 }
             }
-            adapter.sort(AudioDeviceWithChannelMask::compareTo)
+            audioDeviceAdapter.sort(AudioDeviceWithChannelMask::compareTo)
         }
 
         override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) {
-            val binding = _binding ?: return
-            val adapter = (binding.settingsAudioDeviceSpinner.adapter as ArrayAdapter<AudioDeviceWithChannelMask>)
             val removedDeviceIds = removedDevices.map { it.id }.toSet()
-            (0 until adapter.count)
+            (0 until audioDeviceAdapter.count)
                 .asSequence()
-                .mapNotNull(adapter::getItem)
+                .mapNotNull(audioDeviceAdapter::getItem)
                 .filter { it.device.id in removedDeviceIds }
-                .forEach(adapter::remove)
+                .forEach(audioDeviceAdapter::remove)
         }
     }
 
@@ -320,7 +223,7 @@ class SettingsFragment : Fragment(),
         }
     }
 
-    enum class BitDepth(val text: String, val encodingValue: Int) {
+    enum class SampleEncoding(val text: String, val encodingValue: Int) {
         ONE_BYTE("8", AudioFormat.ENCODING_PCM_8BIT),
         TWO_BYTES("16", AudioFormat.ENCODING_PCM_16BIT),
         THREE_BYTES("24", AudioFormat.ENCODING_PCM_24BIT_PACKED),
