@@ -88,7 +88,7 @@ class RecordingService : Service() {
                     val command = FinishTakeCommand.fromMessage(msg)!!
                     val response = state.finishTake()
                     Log.i(javaClass.name, "command = $command, response = $response")
-                    msg.replyTo?.send(FinishTakeCommand.buildMessage())
+                    msg.replyTo?.send(FinishTakeCommand.Response.buildMessage(response))
                 }
                 else -> {
                     Log.e(javaClass.name, "Unrecognized message $msg")

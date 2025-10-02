@@ -38,4 +38,5 @@
     <string name="toast_cant_listen_device_not_available">Can\'t access the selected device. Check the system settings, android probably forces the use of a specific audio device.</string>
     <string name="toast_cant_confgiure_invalid">This configuration seems not to work, sorry.</string>
     <string name="toast_cant_confgiure_still_recording">Stop the recording before applying new settings.</string>
+    <string name="toast_cant_finish_not_recording">Not currently recording.</string>
 </resources>

@@ -44,11 +44,12 @@ class FinishTakeCommand : Parcelable {
                 return message
             }
 
-            fun fromMessage(message: Message): Response? {
-                if (message.what != WHAT_VALUE) {
-                    return null
+            fun fromMessage(message: Message): Response {
+                require(message.what == WHAT_VALUE) {
+                    "Expected what=$WHAT_VALUE, got ${message.what}"
                 }
-                return message.data.getParcelable(null, Response::class.java)
+
+                return message.data.getParcelable(null, Response::class.java)!!
             }
         }
     }

@@ -20,19 +20,21 @@ import androidx.lifecycle.repeatOnLifecycle
 import io.github.tmarsteel.hqrecorder.MainActivity
 import io.github.tmarsteel.hqrecorder.R
 import io.github.tmarsteel.hqrecorder.databinding.FragmentRecordBinding
+import io.github.tmarsteel.hqrecorder.recording.FinishTakeCommand
 import io.github.tmarsteel.hqrecorder.recording.RecordingService
 import io.github.tmarsteel.hqrecorder.recording.RecordingStatusServiceMessage
+import io.github.tmarsteel.hqrecorder.recording.StartNewTakeCommand
 import io.github.tmarsteel.hqrecorder.recording.StartOrStopListeningCommand
 import io.github.tmarsteel.hqrecorder.recording.UpdateRecordingConfigCommand
-import io.github.tmarsteel.hqrecorder.ui.ListeningStatusSubscriber
 import io.github.tmarsteel.hqrecorder.ui.RecordingConfigViewModel
 import io.github.tmarsteel.hqrecorder.ui.SignalLevelIndicatorView
 import io.github.tmarsteel.hqrecorder.util.CoroutineServiceCommunicator
 import io.github.tmarsteel.hqrecorder.util.CoroutineServiceCommunicator.Companion.coDoWithService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.concurrent.LinkedBlockingQueue
 
-class RecordFragment : Fragment(), ListeningStatusSubscriber {
+class RecordFragment : Fragment() {
 
     private var _binding: FragmentRecordBinding? = null
 
@@ -42,6 +44,8 @@ class RecordFragment : Fragment(), ListeningStatusSubscriber {
 
     private val recordingConfigViewModel: RecordingConfigViewModel by activityViewModels()
     private lateinit var tracksAdapter: RecordTrackAdapter
+
+    private val serviceInteractionQueue = LinkedBlockingQueue<suspend (CoroutineServiceCommunicator) -> Unit>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,7 +71,12 @@ class RecordFragment : Fragment(), ListeningStatusSubscriber {
                         setUpRecordingServiceAndStartListening(comm)
 
                         while (true) {
-                            delay(1000)
+                            val nextTask = serviceInteractionQueue.poll()
+                            if (nextTask != null) {
+                                nextTask(comm)
+                            } else {
+                                delay(100)
+                            }
                         }
                     }
                     finally {
@@ -169,13 +178,7 @@ class RecordFragment : Fragment(), ListeningStatusSubscriber {
         }
     }
 
-    override fun onListeningStarted() {
-        view?.allViews
-            ?.filterIsInstance<SignalLevelIndicatorView>()
-            ?.forEach { it.reset() }
-    }
-
-    override fun onStatusUpdate(update: RecordingStatusServiceMessage) {
+    private fun onStatusUpdate(update: RecordingStatusServiceMessage) {
         view?.allViews
             ?.filterIsInstance<SignalLevelIndicatorView>()
             ?.forEach { indicator ->
@@ -196,25 +199,54 @@ class RecordFragment : Fragment(), ListeningStatusSubscriber {
         }
     }
 
-    override fun onListeningStopped() {
-        view?.allViews
-            ?.filterIsInstance<SignalLevelIndicatorView>()
-            ?.forEach { it.sampleValue = 0.0f }
-    }
-
     fun startRecordingNextTake() {
         binding.recordNextTakeBt.isEnabled = false
-        lifecycleScope.launch {
+        binding.recordFinishBt.isEnabled = false
+        serviceInteractionQueue.put { comm ->
             try {
+                val response = StartNewTakeCommand.Response.fromMessage(
+                    comm.exchangeWithService(StartNewTakeCommand.buildMessage())
+                )!!
+                when (response.result) {
+                    StartNewTakeCommand.Response.Result.RECORDING -> {
+                        // all good, as requested
+                    }
+
+                    StartNewTakeCommand.Response.Result.INVALID_STATE -> {
+                        Toast.makeText(requireContext(), R.string.toast_cant_listen_invalid_config, Toast.LENGTH_LONG).show()
+                    }
+                }
             }
             finally {
                 binding.recordNextTakeBt.isEnabled = true
+                binding.recordFinishBt.isEnabled = true
             }
         }
     }
 
     private fun stopRecording() {
-
+        binding.recordNextTakeBt.isEnabled = false
+        binding.recordFinishBt.isEnabled = false
+        serviceInteractionQueue.put { comm ->
+            try {
+                val response = FinishTakeCommand.Response.fromMessage(
+                    comm.exchangeWithService(FinishTakeCommand.buildMessage())
+                )!!
+                when (response.result) {
+                    FinishTakeCommand.Response.Result.FINISHED -> {
+                        // all good, as requested
+                    }
+                    FinishTakeCommand.Response.Result.NOT_RECORDING,
+                    FinishTakeCommand.Response.Result.INVALID_STATE -> {
+                        Toast.makeText(requireContext(), R.string.toast_cant_finish_not_recording, Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            finally {
+                binding.recordNextTakeBt.isEnabled = true
+                binding.recordFinishBt.isEnabled = true
+            }
+        }
     }
 
     companion object {
