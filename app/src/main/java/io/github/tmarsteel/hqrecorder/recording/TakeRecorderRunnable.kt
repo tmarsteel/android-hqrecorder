@@ -211,14 +211,16 @@ class TakeRecorderRunnable private constructor(
             extractSampleBytes(compoundFrame, sampleSizeInBytes, leftOrMonoChannelSampleIndexInFrame, copyBuffer, 0)
             val leftSample = convertSampleToFloat32(copyBuffer, 0, sampleSizeInBytes)
             leftStatusSample = accumulateSampleForStatus(leftStatusSample, leftSample)
+            var allSamplesSizeInBytes = sampleSizeInBytes
 
             if (rightChannelSampleIndexInFrame != null) {
                 extractSampleBytes(compoundFrame, sampleSizeInBytes, rightChannelSampleIndexInFrame, copyBuffer, sampleSizeInBytes)
                 val rightSample = convertSampleToFloat32(copyBuffer, sampleSizeInBytes, sampleSizeInBytes)
                 rightStatusSample = accumulateSampleForStatus(rightStatusSample, rightSample)
+                allSamplesSizeInBytes += sampleSizeInBytes
             }
 
-            currentTake?.writeSampleData(copyBuffer, 0, copyBuffer.size)
+            currentTake?.writeSampleData(copyBuffer, 0, allSamplesSizeInBytes)
         }
 
         /**
