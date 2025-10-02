@@ -182,7 +182,6 @@ class RecordFragment : Fragment() {
         view?.allViews
             ?.filterIsInstance<SignalLevelIndicatorView>()
             ?.forEach { indicator ->
-                Log.i(javaClass.name, "indicator ${System.identityHashCode(indicator)}: ${indicator.indicatesTrackId} ${indicator.indicatesLeftOrRight}")
                 val trackLevels = indicator.indicatesTrackId?.let(update.trackLevels::get)
                     ?: return@forEach
                 indicator.update(
