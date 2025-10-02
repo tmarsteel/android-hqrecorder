@@ -23,16 +23,10 @@ import androidx.navigation.ui.setupActionBarWithNavController
 import androidx.navigation.ui.setupWithNavController
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import io.github.tmarsteel.hqrecorder.databinding.ActivityMainBinding
-import io.github.tmarsteel.hqrecorder.recording.FinishTakeCommand
 import io.github.tmarsteel.hqrecorder.recording.RecordingConfig
-import io.github.tmarsteel.hqrecorder.recording.RecordingService
-import io.github.tmarsteel.hqrecorder.recording.RecordingStatusServiceMessage
-import io.github.tmarsteel.hqrecorder.recording.StartNewTakeCommand
-import io.github.tmarsteel.hqrecorder.recording.StartOrStopListeningCommand
-import io.github.tmarsteel.hqrecorder.recording.UpdateRecordingConfigCommand
-import io.github.tmarsteel.hqrecorder.ui.ListeningStatusSubscriber
 import io.github.tmarsteel.hqrecorder.ui.RecordingConfigViewModel
 import io.github.tmarsteel.hqrecorder.ui.record.RecordFragment.Companion.TAG
+import io.github.tmarsteel.hqrecorder.util.CoroutinePermissionRequester
 import io.github.tmarsteel.hqrecorder.util.GsonInSharedPreferencesDelegate.Companion.gsonInSharedPreferences
 
 class MainActivity : AppCompatActivity() {
@@ -41,31 +35,12 @@ class MainActivity : AppCompatActivity() {
 
     private val recordingConfigViewModel: RecordingConfigViewModel by viewModels()
 
-    private lateinit var recordingServiceResponseChannelMessenger: Messenger
-    private var recordingServiceMessenger: Messenger? = null
-    private var assumeServiceIsListening = false
-    private val recordingServiceConnection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName, service: IBinder) {
-            recordingServiceMessenger = Messenger(service)
-        }
-
-        override fun onServiceDisconnected(name: ComponentName) {
-            recordingServiceMessenger = null
-            if (assumeServiceIsListening) {
-                listeningSubscribers.forEach {
-                    it.onListeningStopped()
-                }
-            }
-            assumeServiceIsListening = false
-        }
-    }
+    val coroutinePermissionRequester = CoroutinePermissionRequester(this)
 
     private val sharedPreferences by lazy {
         getSharedPreferences(javaClass.name, MODE_PRIVATE)
     }
     private var persistentRecordingConfig: RecordingConfig by gsonInSharedPreferences(this::sharedPreferences::get, RecordingConfig.Companion::INITIAL)
-
-    private val listeningSubscribers = mutableSetOf<ListeningStatusSubscriber>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -89,84 +64,6 @@ class MainActivity : AppCompatActivity() {
         )
         setupActionBarWithNavController(navController, appBarConfiguration)
         navView.setupWithNavController(navController)
-
-        recordingServiceResponseChannelMessenger = Messenger(ServiceIncomingHandler(mainLooper))
-    }
-
-    private fun bindRecordingService() {
-        val recordingServiceIntent = Intent(this, RecordingService::class.java)
-        bindService(
-            recordingServiceIntent,
-            recordingServiceConnection,
-            BIND_AUTO_CREATE,
-        )
-    }
-
-    override fun onStart() {
-        super.onStart()
-
-        if (ActivityCompat.checkSelfPermission(
-                applicationContext,
-                Manifest.permission.RECORD_AUDIO
-            ) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(
-                arrayOf("android.permission.RECORD_AUDIO"),
-                REQUEST_CODE_PERMISSION_RECORD_AUDIO_ON_NEXT_TAKE,
-            )
-            return
-        }
-
-        bindRecordingService()
-    }
-
-    fun registerListeningSubscriber(sub: ListeningStatusSubscriber) {
-        val isFirst = listeningSubscribers.isEmpty()
-        listeningSubscribers.add(sub)
-
-        if (isFirst) {
-            tryStartListening()
-        }
-    }
-
-    fun unregisterListeningSubscriber(sub: ListeningStatusSubscriber) {
-        listeningSubscribers.remove(sub)
-        if (listeningSubscribers.isEmpty()) {
-            tryStopListening()
-        }
-    }
-
-    private fun tryStartListening() {
-        if (assumeServiceIsListening) {
-            return
-        }
-
-        if (recordingServiceMessenger == null) {
-            // not yet connected, will start listening once its connected
-            return
-        }
-
-        if (recordingConfigViewModel.config == null) {
-            // no config exists yet, will start listening once its set
-            return
-        }
-        check(!assumeServiceIsListening)
-        check(this::recordingServiceResponseChannelMessenger.isInitialized)
-        check(recordingConfigViewModel.config != null)
-
-        if (ActivityCompat.checkSelfPermission(
-                applicationContext,
-                Manifest.permission.RECORD_AUDIO
-            ) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(
-                arrayOf("android.permission.RECORD_AUDIO"),
-                REQUEST_CODE_PERMISSION_RECORD_AUDIO_ON_NEXT_TAKE,
-            )
-            return
-        }
-
-        val listenCommand = StartOrStopListeningCommand.buildMessage(start = true, statusSubscription = true)
-        listenCommand.replyTo = recordingServiceResponseChannelMessenger
-        recordingServiceMessenger!!.send(listenCommand)
     }
 
     override fun onRequestPermissionsResult(
@@ -176,40 +73,7 @@ class MainActivity : AppCompatActivity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 
-        when (requestCode) {
-            REQUEST_CODE_PERMISSION_RECORD_AUDIO_ON_NEXT_TAKE -> {
-                assert(permissions.single() == "android.permission.RECORD_AUDIO")
-                when (grantResults.single()) {
-                    PackageManager.PERMISSION_GRANTED -> {
-                        Log.i(TAG, "Got microphone permission")
-                        bindRecordingService()
-                    }
-                    PackageManager.PERMISSION_DENIED -> {
-                        Log.i(TAG, "Microphone permission was denied")
-                        Toast.makeText(this, R.string.record_no_permission, Toast.LENGTH_LONG).show()
-                    }
-                }
-            }
-            else -> {
-                Log.e(TAG, "Unknown request code in onRequestPermissionsResult: $requestCode")
-            }
-        }
-    }
-
-    private fun tryStopListening() {
-        if (!assumeServiceIsListening) {
-            return
-        }
-
-        if (recordingServiceMessenger == null) {
-            assumeServiceIsListening = false
-            return
-        }
-
-        val listenCommand = StartOrStopListeningCommand.buildMessage(start = false, statusSubscription = false)
-        listenCommand.replyTo = recordingServiceResponseChannelMessenger
-        recordingServiceMessenger!!.send(listenCommand)
-        assumeServiceIsListening = false
+        coroutinePermissionRequester.onRequestPermissionsResult(requestCode, permissions, grantResults)
     }
 
     fun updateRecordingConfig(newValue: RecordingConfig) {
@@ -219,90 +83,5 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
-
-        unbindService(recordingServiceConnection)
-    }
-
-    private inner class ServiceIncomingHandler(looper: Looper) : Handler(looper) {
-        override fun handleMessage(msg: Message) {
-            when (msg.what) {
-                FinishTakeCommand.Response.WHAT_VALUE -> {
-                    Toast.makeText(this@MainActivity, R.string.toast_take_saved, Toast.LENGTH_LONG).show()
-                }
-                StartNewTakeCommand.Response.WHAT_VALUE -> {
-                    val response = StartNewTakeCommand.Response.fromMessage(msg)!!
-                    when (response.result) {
-                        StartNewTakeCommand.Response.Result.INVALID_STATE -> {
-                            Toast.makeText(this@MainActivity, R.string.toast_cant_listen_invalid_config, Toast.LENGTH_LONG).show()
-                        }
-                        StartNewTakeCommand.Response.Result.RECORDING -> {
-                            // nothing to do, as requested
-                        }
-                    }
-                }
-                StartOrStopListeningCommand.Response.WHAT_VALUE -> {
-                    val response = StartOrStopListeningCommand.Response.fromMessage(msg)!!
-                    when (response.result) {
-                        StartOrStopListeningCommand.Response.Result.STILL_RECORDING -> {
-                            Toast.makeText(this@MainActivity, R.string.toast_cant_listen_still_recording, Toast.LENGTH_LONG).show()
-                        }
-                        StartOrStopListeningCommand.Response.Result.NO_PERMISSION -> {
-                            Toast.makeText(this@MainActivity, R.string.toast_cant_listen_no_mic_permission, Toast.LENGTH_LONG).show()
-                        }
-                        StartOrStopListeningCommand.Response.Result.NOT_CONFIGURED -> {
-                            Toast.makeText(this@MainActivity, R.string.toast_cant_listen_no_config, Toast.LENGTH_LONG).show()
-                        }
-                        StartOrStopListeningCommand.Response.Result.DEVICE_NOT_AVAILABLE -> {
-                            Toast.makeText(this@MainActivity, R.string.toast_cant_listen_device_not_available, Toast.LENGTH_LONG).show()
-                        }
-                        StartOrStopListeningCommand.Response.Result.LISTENING,
-                        StartOrStopListeningCommand.Response.Result.NOT_LISTENING -> {
-                            // nothing to do, as requested
-                        }
-                    }
-                }
-                UpdateRecordingConfigCommand.Response.WHAT_VALUE -> {
-                    val response = UpdateRecordingConfigCommand.Response.fromMessage(msg)!!
-                    when (response.result) {
-                        UpdateRecordingConfigCommand.Response.Result.STOP_RECORDING_FIRST -> {
-                            Toast.makeText(this@MainActivity, R.string.toast_cant_confgiure_still_recording, Toast.LENGTH_LONG).show()
-                        }
-                        UpdateRecordingConfigCommand.Response.Result.INVALID -> {
-                            Toast.makeText(this@MainActivity, R.string.toast_cant_confgiure_invalid, Toast.LENGTH_LONG).show()
-                        }
-                        UpdateRecordingConfigCommand.Response.Result.OK -> {
-                            // nothing to do, as requested
-                        }
-                    }
-                }
-                RecordingStatusServiceMessage.WHAT_VALUE -> {
-                    val message = RecordingStatusServiceMessage.fromMessage(msg)!!
-                    if (message.isListening) {
-                        if (!assumeServiceIsListening) {
-                            listeningSubscribers.forEach {
-                                it.onListeningStarted()
-                            }
-                        }
-                        assumeServiceIsListening = true
-                    } else {
-                        if (assumeServiceIsListening) {
-                            listeningSubscribers.forEach {
-                                it.onListeningStopped()
-                            }
-                        }
-                        assumeServiceIsListening = false
-                    }
-
-                    listeningSubscribers.forEach {
-                        it.onStatusUpdate(message)
-                    }
-                }
-            }
-        }
-    }
-
-    companion object {
-        const val REQUEST_CODE_PERMISSION_RECORD_AUDIO_ON_NEXT_TAKE: Int = 1
-        val BUNDLE_KEY_RECORDING_CONFIG = "recording_config"
     }
 }

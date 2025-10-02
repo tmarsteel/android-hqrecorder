@@ -27,9 +27,9 @@ class RecordTrackAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
 
         if (track.rightDeviceChannel != null) {
             rightLevel.visibility = View.VISIBLE
-            rightLevel.indicatesTrackId = null
         } else{
             rightLevel.visibility = View.INVISIBLE
+            rightLevel.indicatesTrackId = null
         }
 
         return view
