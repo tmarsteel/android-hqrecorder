@@ -193,7 +193,7 @@ class RecordFragment : Fragment() {
         _binding?.let { binding ->
             binding.recordLivenessIndicator.setImageResource(if (update.isRecording) R.drawable.ic_recording else R.drawable.ic_not_recording)
 
-            val nMinutes = update.currentTakeDuration.inWholeSeconds
+            val nMinutes = update.currentTakeDuration.inWholeMinutes
             val nSeconds = update.currentTakeDuration.inWholeSeconds % 60
             binding.recordTakeLength.text = "${nMinutes.toString(10).padStart(2, '0')}:${nSeconds.toString(10).padStart(2, '0')}"
         }
@@ -231,7 +231,7 @@ class RecordFragment : Fragment() {
             try {
                 val response = FinishTakeCommand.Response.fromMessage(
                     comm.exchangeWithService(FinishTakeCommand.buildMessage())
-                )!!
+                )
                 when (response.result) {
                     FinishTakeCommand.Response.Result.FINISHED -> {
                         // all good, as requested
