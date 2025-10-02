@@ -7,7 +7,7 @@
     tools:context=".ui.record.RecordFragment">
 
     <Button
-        android:id="@+id/next_take_bt"
+        android:id="@+id/record_next_take_bt"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         app:layout_constraintTop_toTopOf="parent"
@@ -15,21 +15,47 @@
         android:text="@string/record_start_next_take"
         />
     <Button
-        android:id="@+id/finish_bt"
+        android:id="@+id/record_finish_bt"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toEndOf="@id/next_take_bt"
+        app:layout_constraintStart_toEndOf="@id/record_next_take_bt"
         android:layout_marginStart="@dimen/activity_horizontal_margin"
         android:text="@string/record_start_finish"
         />
 
-    <io.github.tmarsteel.hqrecorder.ui.SignalLevelIndicatorView
-        android:id="@+id/level_indicator"
+    <ImageView
+        android:id="@+id/record_liveness_indicator"
+        android:layout_width="wrap_content"
+        android:layout_height="0dp"
+        app:layout_constraintWidth="wrap_content"
+        app:layout_constraintStart_toEndOf="@id/record_finish_bt"
+        app:layout_constraintTop_toTopOf="@id/record_finish_bt"
+        app:layout_constraintBottom_toBottomOf="@id/record_finish_bt"
+        android:layout_marginHorizontal="@dimen/default_inset"
+        android:src="@drawable/ic_not_recording"
+        android:scaleType="centerInside"
+        android:contentDescription="@string/record_indicator_description_not_recording"
+        />
+
+    <TextView
+        android:id="@+id/record_take_length"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        app:layout_constraintTop_toTopOf="@id/record_finish_bt"
+        app:layout_constraintBottom_toBottomOf="@id/record_finish_bt"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:textSize="24sp"
+        android:text="00:00"
+        />
+
+    <ScrollView
+        android:id="@+id/record_track_list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toBottomOf="@id/record_next_take_bt"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/finish_bt"
+        app:layout_constraintBottom_toBottomOf="parent"
         />
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -16,6 +16,7 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.nio.BufferUnderflowException
 import java.nio.ByteBuffer
+import java.time.Instant
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatterBuilder
 import java.time.temporal.ChronoField
@@ -23,7 +24,9 @@ import java.util.Locale
 import kotlin.collections.List
 import kotlin.math.absoluteValue
 import kotlin.math.max
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.nanoseconds
 import kotlin.time.measureTime
 
 class TakeRecorderRunnable private constructor(
@@ -63,6 +66,7 @@ class TakeRecorderRunnable private constructor(
 
         Log.i(javaClass.name, "Starting to listen")
         try {
+            var currentTakeStartedAtNanos: Long = 0
             listenLoop@while (true) {
                 buffer.clear()
                 val readResult = audioRecord.read(buffer, buffer.capacity(), AudioRecord.READ_NON_BLOCKING)
@@ -108,6 +112,7 @@ class TakeRecorderRunnable private constructor(
                         trackStates.forEach {
                             it.startNewTake(timestamp)
                         }
+                        currentTakeStartedAtNanos = System.nanoTime()
                     }
                     if (nextCommand == Command.StopListening) {
                         if (isRecording) {
@@ -130,6 +135,11 @@ class TakeRecorderRunnable private constructor(
                             trackState.leftStatusSample,
                             trackState.rightStatusSample.takeIf { trackState.track.rightDeviceChannel != null }
                         )
+                    },
+                    if (isRecording) {
+                        (System.nanoTime() - currentTakeStartedAtNanos).nanoseconds
+                    } else {
+                        0.milliseconds
                     }
                 ))
                 subscribers.forEach {

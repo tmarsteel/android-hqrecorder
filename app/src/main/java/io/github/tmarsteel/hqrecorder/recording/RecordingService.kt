@@ -25,6 +25,7 @@ import io.github.tmarsteel.hqrecorder.util.bytesPerSecond
 import io.github.tmarsteel.hqrecorder.util.minBufferSizeInBytes
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration.Companion.milliseconds
 
 const val NOTIFICATION_CHANNEL_RECORDING_SERVICE = "recording_service"
 const val NOTIFICATION_ID_RECORDING_SERVICE_FG = 1
@@ -288,6 +289,7 @@ class RecordingService : Service() {
                 isRecording = false,
                 loadPercentage = 0u,
                 trackLevels = emptyMap(),
+                currentTakeDuration = 0.milliseconds,
             ))
             (statusSubscribers + listOfNotNull(subscriber)).forEach {
                 it.send(finalStatusUpdate)

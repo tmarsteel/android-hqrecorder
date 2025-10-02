@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.os.Message
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
+import kotlin.time.Duration
 
 @Parcelize
 data class RecordingStatusServiceMessage(
@@ -28,7 +29,12 @@ data class RecordingStatusServiceMessage(
     /**
      * key: [RecordingConfig.InputTrackConfig.id], value: current levels for left and right channel (right is optional)
      */
-    val trackLevels: Map<Long, Pair<Float, Float?>>
+    val trackLevels: Map<Long, Pair<Float, Float?>>,
+
+    /**
+     * The amount of time/audio data recorded into the current take, or 0 if not [isRecording]
+     */
+    val currentTakeDuration: Duration,
 ) : Parcelable {
     companion object {
         const val WHAT_VALUE = 5
