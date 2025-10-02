@@ -108,6 +108,7 @@ class WavFileWriter(
             AudioFormat.ENCODING_PCM_8BIT to 0x0001u,
             AudioFormat.ENCODING_PCM_16BIT to 0x0001u,
             AudioFormat.ENCODING_PCM_24BIT_PACKED to 0x0001u,
+            AudioFormat.ENCODING_PCM_32BIT to 0x0001u,
             AudioFormat.ENCODING_PCM_FLOAT to 0x0003u,
         )
 
@@ -119,18 +120,6 @@ class WavFileWriter(
             AudioFormat.ENCODING_PCM_FLOAT to 32u,
         )
     }
-}
-
-private fun OutputStream.writeLE(value: UShort) {
-    write(value.toInt() and 0xFF)
-    write(value.toInt() shr 8)
-}
-
-private fun OutputStream.writeLE(value: Int) {
-    write(value and 0xFF)
-    write((value shr 8) and 0xFF)
-    write((value shr 16) and 0xFF)
-    write((value shr 24) and 0xFF)
 }
 
 private fun RandomAccessFile.writeLE(value: UShort) {
