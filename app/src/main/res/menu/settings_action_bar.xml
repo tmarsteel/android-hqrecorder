@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/action_apply_settings"
+        android:icon="@drawable/ic_done_24"
+        android:iconTint="@color/design_default_color_on_primary"
+        android:iconTintMode="src_in"
+        android:title="@string/menu_apply_settings"
+        app:showAsAction="always"
+        />
+</menu>

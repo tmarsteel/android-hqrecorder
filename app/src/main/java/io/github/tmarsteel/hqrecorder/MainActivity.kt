@@ -11,18 +11,20 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.Message
 import android.os.Messenger
+import android.os.PersistableBundle
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.viewModels
-import com.google.android.material.bottomnavigation.BottomNavigationView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.setupActionBarWithNavController
 import androidx.navigation.ui.setupWithNavController
+import com.google.android.material.bottomnavigation.BottomNavigationView
 import io.github.tmarsteel.hqrecorder.databinding.ActivityMainBinding
 import io.github.tmarsteel.hqrecorder.recording.FinishTakeCommand
+import io.github.tmarsteel.hqrecorder.recording.RecordingConfig
 import io.github.tmarsteel.hqrecorder.recording.RecordingService
 import io.github.tmarsteel.hqrecorder.recording.RecordingStatusServiceMessage
 import io.github.tmarsteel.hqrecorder.recording.StartNewTakeCommand
@@ -31,7 +33,7 @@ import io.github.tmarsteel.hqrecorder.recording.UpdateRecordingConfigCommand
 import io.github.tmarsteel.hqrecorder.ui.ListeningStatusSubscriber
 import io.github.tmarsteel.hqrecorder.ui.RecordingConfigViewModel
 import io.github.tmarsteel.hqrecorder.ui.record.RecordFragment.Companion.TAG
-import kotlin.getValue
+import io.github.tmarsteel.hqrecorder.util.GsonInSharedPreferencesDelegate.Companion.gsonInSharedPreferences
 
 class MainActivity : AppCompatActivity() {
 
@@ -58,10 +60,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private val sharedPreferences by lazy {
+        getSharedPreferences(javaClass.name, MODE_PRIVATE)
+    }
+    private var persistentRecordingConfig: RecordingConfig by gsonInSharedPreferences(this::sharedPreferences::get, RecordingConfig.Companion::INITIAL)
+
     private val listeningSubscribers = mutableSetOf<ListeningStatusSubscriber>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        recordingConfigViewModel.config = persistentRecordingConfig
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -203,6 +212,11 @@ class MainActivity : AppCompatActivity() {
         assumeServiceIsListening = false
     }
 
+    fun updateRecordingConfig(newValue: RecordingConfig) {
+        persistentRecordingConfig = newValue
+        recordingConfigViewModel.config = newValue
+    }
+
     override fun onStop() {
         super.onStop()
 
@@ -289,5 +303,6 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         const val REQUEST_CODE_PERMISSION_RECORD_AUDIO_ON_NEXT_TAKE: Int = 1
+        val BUNDLE_KEY_RECORDING_CONFIG = "recording_config"
     }
 }

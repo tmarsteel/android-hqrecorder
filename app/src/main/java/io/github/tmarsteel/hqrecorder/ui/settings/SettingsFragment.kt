@@ -6,12 +6,16 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.os.Bundle
 import android.view.LayoutInflater
+import android.view.Menu
+import android.view.MenuInflater
+import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.core.content.getSystemService
+import androidx.core.view.MenuProvider
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import io.github.tmarsteel.hqrecorder.MainActivity
@@ -20,17 +24,13 @@ import io.github.tmarsteel.hqrecorder.databinding.FragmentSettingsBinding
 import io.github.tmarsteel.hqrecorder.recording.Channel
 import io.github.tmarsteel.hqrecorder.recording.ChannelMask
 import io.github.tmarsteel.hqrecorder.recording.RecordingConfig
-import io.github.tmarsteel.hqrecorder.recording.RecordingStatusServiceMessage
-import io.github.tmarsteel.hqrecorder.ui.ListeningStatusSubscriber
 import io.github.tmarsteel.hqrecorder.ui.RecordingConfigViewModel
-import io.github.tmarsteel.hqrecorder.ui.SignalLevelIndicatorView
 import io.github.tmarsteel.hqrecorder.ui.StringSpinnerAdapter
-import io.github.tmarsteel.hqrecorder.util.allViewsInTree
 import io.github.tmarsteel.hqrecorder.util.items
 import io.github.tmarsteel.hqrecorder.util.setSelectedItemByPredicate
 import java.text.DecimalFormat
 
-class SettingsFragment : Fragment() {
+class SettingsFragment : Fragment(), MenuProvider {
     private var _binding: FragmentSettingsBinding? = null
 
     // This property is only valid between onCreateView and
@@ -65,6 +65,21 @@ class SettingsFragment : Fragment() {
         trackConfigAdapter = TrackConfigAdapter(requireContext())
 
         super.onCreate(savedInstanceState)
+    }
+
+    override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
+        menuInflater.inflate(R.menu.settings_action_bar, menu)
+    }
+
+    override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
+        when (menuItem.itemId) {
+            R.id.action_apply_settings -> {
+                (requireActivity() as MainActivity).updateRecordingConfig(buildModelFromView())
+                return true
+            }
+        }
+
+        return false
     }
 
     override fun onCreateView(
@@ -124,6 +139,18 @@ class SettingsFragment : Fragment() {
         updateViewWithCurrentViewModel()
 
         return root
+    }
+
+    override fun onStart() {
+        super.onStart()
+
+        activity?.addMenuProvider(this)
+    }
+
+    override fun onStop() {
+        super.onStop()
+
+        activity?.removeMenuProvider(this)
     }
 
     private fun updateViewWithCurrentViewModel() {
@@ -186,6 +213,18 @@ class SettingsFragment : Fragment() {
             leftChannel,
             rightChannel
         ))
+    }
+
+    private fun buildModelFromView(): RecordingConfig {
+        val selectedDeviceWithMask = binding.settingsAudioDeviceSpinner.selectedItem as AudioDeviceWithChannelMask?
+        return RecordingConfig(
+            selectedDeviceWithMask?.device?.address ?: RecordingConfig.INITIAL.deviceAddress,
+            deviceId = selectedDeviceWithMask?.device?.id ?: RecordingConfig.INITIAL.deviceId,
+            channelMask = selectedDeviceWithMask?.channelMask ?: RecordingConfig.INITIAL.channelMask,
+            binding.settingsSamplingRateSpinner.selectedItem as Int,
+            (binding.settingsSampleEncodingSpinner.selectedItem as SampleEncoding).encodingValue,
+            trackConfigAdapter.items().toList(),
+        )
     }
 
     override fun onDestroyView() {
