@@ -75,21 +75,6 @@ class WavFileWriter(
         }
     }
 
-    fun writeSampleDataConsuming(buffer: ByteBuffer) {
-        if (buffer.hasArray()) {
-            writeSampleData(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining())
-            buffer.position(buffer.limit())
-            return
-        }
-
-        val copyBuffer = ByteArray(1024)
-        while (buffer.remaining() > 0) {
-            val n = buffer.remaining().coerceAtMost(copyBuffer.size)
-            buffer.get(copyBuffer, 0, n)
-            writeSampleData(copyBuffer, 0, n)
-        }
-    }
-
     private var closed = false
     override fun close() {
         check(!closed)
