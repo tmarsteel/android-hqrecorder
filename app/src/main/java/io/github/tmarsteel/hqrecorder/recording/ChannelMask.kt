@@ -19,11 +19,11 @@ value class ChannelMask(val mask: Int) : Parcelable, Comparable<ChannelMask> {
     )
 
     override fun toString(): String {
-        val hwChannelNumbers = channels.toList().sorted()
-        return when (hwChannelNumbers.size) {
-            1 -> "hardware channel ${hwChannelNumbers.single()}"
-            2 -> "hardware channels ${hwChannelNumbers[0]} + ${hwChannelNumbers[1]}"
-            else -> "hardware channels ${hwChannelNumbers.joinToString(separator = ", ")}"
+        val hwChannels = channels.toList().sorted()
+        return when (hwChannels.size) {
+            1 -> "hardware channel ${hwChannels.single()}"
+            2 -> "hardware channels ${hwChannels[0]} + ${hwChannels[1]}"
+            else -> "hardware channels ${hwChannels.joinToString(separator = ", ")}"
         }
     }
 
@@ -48,12 +48,12 @@ value class ChannelMask(val mask: Int) : Parcelable, Comparable<ChannelMask> {
         }
 
         fun forChannels(channels: Iterable<Channel>): ChannelMask {
-            var mask = 0
-            for (ch in channels) {
-                mask = mask or ch.maskForChannel
+            var mask = EMPTY
+            for (channel in channels) {
+                mask += channel
             }
 
-            return ChannelMask(mask)
+            return mask
         }
 
         val EMPTY = ChannelMask(0)

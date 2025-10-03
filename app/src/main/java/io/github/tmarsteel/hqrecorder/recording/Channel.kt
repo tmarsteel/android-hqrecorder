@@ -1,5 +1,6 @@
 package io.github.tmarsteel.hqrecorder.recording
 
+import android.media.AudioFormat
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 
@@ -7,8 +8,8 @@ import kotlinx.parcelize.Parcelize
 @JvmInline
 value class Channel(val number: Int) : Comparable<Channel>, Parcelable {
     init {
-        require(number in 1..32) {
-            "Channels numbers must be in the range [1; 32]"
+        require(number in NUMBER_RANGE) {
+            "Channels numbers must be in the range $NUMBER_RANGE"
         }
     }
 
@@ -17,20 +18,20 @@ value class Channel(val number: Int) : Comparable<Channel>, Parcelable {
     }
 
     fun coerceAtLeast(other: Channel?): Channel {
-        return Channel(number.coerceAtLeast(other?.number ?: 0))
+        return Channel(number.coerceAtLeast(other?.number ?: 1))
     }
 
     override fun toString(): String = number.toString()
 
-    val maskForChannel: Int get()= 1 shl number
+    val maskForChannel: Int get()= 1 shl (number - 1)
 
     companion object {
+        val NUMBER_RANGE = 1..32
         val FIRST = Channel(1)
-        val SECOND = Channel(2)
 
         val all: Sequence<Channel> = sequence {
-            for (bit in 0..31) {
-                yield(Channel(bit + 1))
+            for (number in 1..32) {
+                yield(Channel(number))
             }
         }
     }
