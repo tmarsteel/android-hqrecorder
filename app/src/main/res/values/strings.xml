@@ -26,6 +26,11 @@
     <string name="record_indicator_description_not_recording">Not recording</string>
     <string name="record_indicator_description_recording">recording</string>
 
+    <string name="mono">Mono</string>
+    <string name="stereo">Stereo</string>
+    <string name="recordings_metrics">%2$,d Hz %1$dbit</string>
+    <string name="recordings_no_items">No recordings stored.</string>
+
     <string name="notification_record_ready">Ready to record.</string>
 
     <string name="error_no_audio_manager">Couldn\'t access the AudioManager API</string>

@@ -122,7 +122,7 @@ class TakeRecorderRunnable private constructor(
                     break@listenLoop
                 }
 
-                val statusMessage = RecordingStatusServiceMessage.buildMessage(RecordingStatusServiceMessage(
+                val statusMessage = RecordingStatusServiceMessage(
                     true,
                     isRecording,
                     loadPercentage,
@@ -137,9 +137,9 @@ class TakeRecorderRunnable private constructor(
                     } else {
                         0.milliseconds
                     }
-                ))
+                )
                 subscribers.forEach {
-                    it.send(statusMessage)
+                    it.send(RecordingStatusServiceMessage.buildMessage(statusMessage))
                 }
 
                 Thread.sleep(AUDIO_POLL_DELAY.inWholeMilliseconds)
