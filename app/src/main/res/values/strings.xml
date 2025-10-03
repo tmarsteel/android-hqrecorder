@@ -8,7 +8,8 @@
 
     <string name="record_start_next_take">New Take</string>
     <string name="record_start_finish">Finish</string>
-    <string name="record_no_permission">Could not get permission to access the microphone.</string>
+    <string name="record_no_audio_permission">Could not get permission to access the microphone.</string>
+    <string name="record_no_notification_permission">Recording will stop when you close the app. Allow notifications to fix this.</string>
     <string name="record_clip_indicator">Clip</string>
 
     <string name="settings_audio_device">Audio Device</string>
@@ -33,6 +34,7 @@
     <string name="recordings_item_share">Share/export this recording.</string>
     <string name="recordings_item_share_choosertitle">Share recording %s</string>
 
+    <string name="notification_record_channel_name">Record in the background</string>
     <string name="notification_record_ready">Ready to record.</string>
 
     <string name="error_no_audio_manager">Couldn\'t access the AudioManager API</string>

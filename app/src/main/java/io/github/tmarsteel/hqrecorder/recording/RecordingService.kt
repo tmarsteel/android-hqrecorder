@@ -27,7 +27,7 @@ import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.milliseconds
 
-const val NOTIFICATION_CHANNEL_RECORDING_SERVICE = "recording_service"
+const val NOTIFICATION_CHANNEL_ID_RECORDING_SERVICE = "recording_service"
 const val NOTIFICATION_ID_RECORDING_SERVICE_FG = 1
 
 class RecordingService : Service() {
@@ -39,22 +39,47 @@ class RecordingService : Service() {
     }
 
     override fun onCreate() {
-        Log.i(javaClass.name, "onCreate")
-        val channel = NotificationChannel(NOTIFICATION_CHANNEL_RECORDING_SERVICE, NOTIFICATION_CHANNEL_RECORDING_SERVICE, NotificationManager.IMPORTANCE_NONE).also {
-            it.description = "Notification for the recording background task"
-        }
-        getSystemService<NotificationManager>()!!.createNotificationChannel(channel)
-        val notification = Notification.Builder(this, NOTIFICATION_CHANNEL_RECORDING_SERVICE)
+        assureNotificationChannelExists()
+        val notification = Notification.Builder(this, NOTIFICATION_CHANNEL_ID_RECORDING_SERVICE)
             .setContentTitle(getString(R.string.notification_record_ready))
+            .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_DEFERRED)
+            .setLocalOnly(true)
             .build()
         startForeground(NOTIFICATION_ID_RECORDING_SERVICE_FG, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
 
         audioManager = getSystemService(AudioManager::class.java)
     }
 
+    private fun assureNotificationChannelExists() {
+        val notificationManager = getSystemService<NotificationManager>()!!
+        if (notificationManager.getNotificationChannel(NOTIFICATION_CHANNEL_ID_RECORDING_SERVICE) != null) {
+            return
+        }
+
+        val channel = NotificationChannel(
+            NOTIFICATION_CHANNEL_ID_RECORDING_SERVICE,
+            getString(R.string.notification_record_channel_name),
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Notification for the recording background task"
+            enableVibration(false)
+            enableLights(false)
+            setSound(null, null)
+        }
+
+        notificationManager.createNotificationChannel(channel)
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.i(javaClass.name, "onStartCommand")
-        return START_NOT_STICKY
+        return START_STICKY
+    }
+
+    override fun onUnbind(intent: Intent?): Boolean {
+        super.onUnbind(intent)
+
+        state.onUnbind()
+        return false
     }
 
     override fun onDestroy() {
@@ -102,6 +127,7 @@ class RecordingService : Service() {
         fun startOrStopListening(command: StartOrStopListeningCommand, subscriber: Messenger?): StartOrStopListeningCommand.Response
         fun startNewTake(): StartNewTakeCommand.Response
         fun finishTake(): FinishTakeCommand.Response
+        fun onUnbind()
     }
 
     private inner class Initial : State {
@@ -145,6 +171,10 @@ class RecordingService : Service() {
             return FinishTakeCommand.Response(
                 FinishTakeCommand.Response.Result.INVALID_STATE
             )
+        }
+
+        override fun onUnbind() {
+            stopSelf()
         }
     }
 
@@ -233,6 +263,11 @@ class RecordingService : Service() {
             }
             audioRecord?.release()
             audioRecord = null
+        }
+
+        override fun onUnbind() {
+            dispose()
+            stopSelf()
         }
     }
 
@@ -346,6 +381,16 @@ class RecordingService : Service() {
                     FinishTakeCommand.Response.Result.NOT_RECORDING
                 )
             }
+        }
+
+        override fun onUnbind() {
+            if (listeningThread.isAlive && listeningRunnable.isRecording) {
+                return
+            }
+
+            internalStopListening(null)
+            // now in configured state
+            state.onUnbind()
         }
     }
 

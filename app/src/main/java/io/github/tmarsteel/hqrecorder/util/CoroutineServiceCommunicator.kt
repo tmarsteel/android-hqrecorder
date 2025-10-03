@@ -131,9 +131,16 @@ class CoroutineServiceCommunicator private constructor(
             context: Context,
             intent: Intent,
             flags: Int,
+            startBeforeBind: Boolean = false,
             immediateHandler: ImmediateHandler = ImmediateHandler.ROUTE_ALL_MESSAGES_TO_COROUTINE,
             jobWithService: ActionWithService,
         ) {
+            if (startBeforeBind) {
+                if (context.startService(intent) == null) {
+                    throw BindException("The service doesn't exist (${context::startService.name} returned null)")
+                }
+            }
+
             val outerCommunicator = suspendCoroutine<CoroutineServiceCommunicator> { connectionContinuation ->
                 val connection = object : ServiceConnection {
                     private var communicator: CoroutineServiceCommunicator? = null
@@ -187,6 +194,6 @@ class CoroutineServiceCommunicator private constructor(
         }
     }
 
-    class BindException : RuntimeException()
+    class BindException(message: String? = null) : RuntimeException(message)
     class ServiceIsDisconnectedException : RuntimeException()
 }

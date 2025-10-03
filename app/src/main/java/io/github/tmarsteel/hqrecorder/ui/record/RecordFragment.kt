@@ -1,12 +1,10 @@
 package io.github.tmarsteel.hqrecorder.ui.record
 
+import android.Manifest
 import android.content.Context.BIND_AUTO_CREATE
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.graphics.drawable.Icon
 import android.os.Bundle
 import android.os.Message
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -52,12 +50,16 @@ class RecordFragment : Fragment() {
 
         lifecycleScope.launch {
            val permissions = (requireActivity() as MainActivity).coroutinePermissionRequester.requestPermissions(
-                arrayOf(PERMISSION_RECORD_AUDIO),
+                arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS),
                REQUEST_CODE_REQUEST_AUDIO_PERMISSIONS,
             )
-            if (PERMISSION_RECORD_AUDIO !in permissions) {
-                Toast.makeText(requireContext(), R.string.record_no_permission, Toast.LENGTH_LONG).show()
+            if (Manifest.permission.RECORD_AUDIO !in permissions) {
+                Toast.makeText(requireContext(), R.string.record_no_audio_permission, Toast.LENGTH_LONG).show()
                 return@launch
+            }
+
+            if (Manifest.permission.POST_NOTIFICATIONS !in permissions) {
+                Toast.makeText(requireContext(), R.string.record_no_notification_permission, Toast.LENGTH_LONG).show()
             }
 
             lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -65,6 +67,7 @@ class RecordFragment : Fragment() {
                     context = requireContext(),
                     intent = Intent(requireContext(), RecordingService::class.java),
                     flags = BIND_AUTO_CREATE,
+                    startBeforeBind = true,
                     immediateHandler = this@RecordFragment::tryHandleStatusUpdate,
                 ) { comm ->
                     try {
@@ -75,7 +78,7 @@ class RecordFragment : Fragment() {
                             if (nextTask != null) {
                                 nextTask(comm)
                             } else {
-                                delay(100)
+                                delay(50)
                             }
                         }
                     }
