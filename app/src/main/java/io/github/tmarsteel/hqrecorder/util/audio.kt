@@ -3,6 +3,9 @@ package io.github.tmarsteel.hqrecorder.util
 import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioRecord
+import io.github.tmarsteel.hqrecorder.recording.TakeRecorderRunnable
+import java.nio.BufferUnderflowException
+import java.nio.ByteBuffer
 import java.nio.FloatBuffer
 import java.text.DecimalFormat
 import java.util.concurrent.atomic.AtomicReference
@@ -112,5 +115,77 @@ fun getSampleLevelAsDecibelText(sample: Float): String {
 }
 
 fun Float.getRelationToInDecibels(other: Float): Float {
-    return (log10(toDouble() / other.toDouble()) * 10.0).toFloat()
+    return (log10(toDouble() / other.toDouble()) * 20.0).toFloat()
+}
+
+/**
+ * reads one sample of the size [sampleSizeInBytes] from [src] starting at [off] and converts it to a sample of the format
+ * [AudioFormat.ENCODING_PCM_FLOAT].
+ * @param encoding see [AudioFormat.getEncoding]
+ */
+fun convertSampleToFloat32(src: ByteArray, off: Int, sampleSizeInBytes: Int, encoding: Int): Float {
+    return when (encoding) {
+        AudioFormat.ENCODING_PCM_8BIT -> {
+            assert(sampleSizeInBytes == 1)
+            (src[off].toFloat().absoluteValue / Byte.MAX_VALUE.toFloat()) * Float.MAX_VALUE
+        }
+        AudioFormat.ENCODING_PCM_16BIT -> {
+            assert(sampleSizeInBytes == 2)
+            // the input data is LE, but java runs on BE
+            val byte0 = src[off + 0].toInt() and 0xFF
+            val byte1 = src[off + 1].toInt() and 0xFF
+            val value = ((byte1 shl 8) or byte0).toShort()
+            (value.toFloat().absoluteValue / (Short.MAX_VALUE.toFloat())) * Float.MAX_VALUE
+        }
+        AudioFormat.ENCODING_PCM_24BIT_PACKED -> {
+            assert(sampleSizeInBytes == 2)
+            // the input data is LE, but java runs on BE
+            val byte0 = src[off + 0].toInt() and 0xFF
+            val byte1 = src[off + 1].toInt() and 0xFF
+            val byte2 = src[off + 2].toInt() and 0xFF
+            val value = (byte2 shl 16) or (byte1 shl 8) or byte0
+            (value.toFloat().absoluteValue / TakeRecorderRunnable.Companion.MAX_SAMPLE_24BIT_INT) * Float.MAX_VALUE
+        }
+        AudioFormat.ENCODING_PCM_32BIT -> {
+            // the input data is LE, but java runs on BE
+            val byte0 = src[off + 0].toInt() and 0xFF
+            val byte1 = src[off + 1].toInt() and 0xFF
+            val byte2 = src[off + 2].toInt() and 0xFF
+            val byte3 = src[off + 3].toInt() and 0xFF
+            val value = (byte3 shl 24) or (byte2 shl 16) or (byte1 shl 8) or byte0
+            ((value.toDouble().absoluteValue / TakeRecorderRunnable.Companion.MAX_SAMPLE_32BIT_INT) * Float.MAX_VALUE.toDouble()).toFloat()
+        }
+        AudioFormat.ENCODING_PCM_FLOAT -> {
+            val byte0 = src[off + 0].toInt() and 0xFF
+            val byte1 = src[off + 1].toInt() and 0xFF
+            val byte2 = src[off + 2].toInt() and 0xFF
+            val byte3 = src[off + 3].toInt() and 0xFF
+            Float.fromBits((byte3 shl 24) or (byte2 shl 16) or (byte1 shl 8) or byte0)
+        }
+        else -> throw RuntimeException("unsupported format")
+    }
+}
+
+/**
+ * Given a buffer that points to the start of a frame where a single sample is [sampleSizeInBytes] long,
+ * writes the bytes that correspond to the sample with index [sampleIndexInFrame] to [dst], starting at index [dstOff].
+ * @param sampleSizeInBytes see [AudioFormat.getEncoding] and [TakeRecorderRunnable.Companion.SAMPLE_SIZE_IN_BYTES_BY_ENCODING]
+ * @param dst should be 4 bytes of size to be able to accommodate all encodings
+ */
+fun extractSampleBytes(
+    compoundFrame: ByteBuffer,
+    sampleSizeInBytes: Int,
+    sampleIndexInFrame: Int,
+    dst: ByteArray,
+    dstOff: Int,
+) {
+    val indexOfFirst = sampleIndexInFrame * sampleSizeInBytes
+    val indexOfLast = indexOfFirst + sampleSizeInBytes - 1
+    if (compoundFrame.remaining() < indexOfLast) {
+        throw BufferUnderflowException()
+    }
+
+    for (byteIndex in 0 until sampleSizeInBytes) {
+        dst[dstOff + byteIndex] = compoundFrame.get(compoundFrame.position() + indexOfFirst + byteIndex)
+    }
 }

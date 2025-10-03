@@ -8,23 +8,19 @@ import android.net.Uri
 import android.os.Messenger
 import android.provider.MediaStore
 import android.util.Log
-import io.github.tmarsteel.hqrecorder.recording.RecordingConfig
-import io.github.tmarsteel.hqrecorder.recording.TakeRecorderRunnable.Companion.SAMPLE_SIZE_IN_BYTES_BY_ENCODING
+import io.github.tmarsteel.hqrecorder.util.convertSampleToFloat32
+import io.github.tmarsteel.hqrecorder.util.extractSampleBytes
 import java.io.Closeable
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.nio.BufferUnderflowException
 import java.nio.ByteBuffer
-import java.time.Instant
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatterBuilder
 import java.time.temporal.ChronoField
 import java.util.Locale
 import kotlin.collections.List
-import kotlin.math.absoluteValue
 import kotlin.math.max
-import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.nanoseconds
 import kotlin.time.measureTime
@@ -209,13 +205,13 @@ class TakeRecorderRunnable private constructor(
          */
         fun useDataFromFrame(compoundFrame: ByteBuffer, sampleSizeInBytes: Int) {
             extractSampleBytes(compoundFrame, sampleSizeInBytes, leftOrMonoChannelSampleIndexInFrame, copyBuffer, 0)
-            val leftSample = convertSampleToFloat32(copyBuffer, 0, sampleSizeInBytes)
+            val leftSample = convertSampleToFloat32(copyBuffer, 0, sampleSizeInBytes, sourceFormat.encoding)
             leftStatusSample = accumulateSampleForStatus(leftStatusSample, leftSample)
             var allSamplesSizeInBytes = sampleSizeInBytes
 
             if (rightChannelSampleIndexInFrame != null) {
                 extractSampleBytes(compoundFrame, sampleSizeInBytes, rightChannelSampleIndexInFrame, copyBuffer, sampleSizeInBytes)
-                val rightSample = convertSampleToFloat32(copyBuffer, sampleSizeInBytes, sampleSizeInBytes)
+                val rightSample = convertSampleToFloat32(copyBuffer, sampleSizeInBytes, sampleSizeInBytes, sourceFormat.encoding)
                 rightStatusSample = accumulateSampleForStatus(rightStatusSample, rightSample)
                 allSamplesSizeInBytes += sampleSizeInBytes
             }
@@ -223,79 +219,8 @@ class TakeRecorderRunnable private constructor(
             currentTake?.writeSampleData(copyBuffer, 0, allSamplesSizeInBytes)
         }
 
-        /**
-         * reads one sample of the size [sampleSizeInBytes] from [src] starting at [off] and converts it to a sample of the format
-         * [AudioFormat.ENCODING_PCM_FLOAT].
-         */
-        private fun convertSampleToFloat32(src: ByteArray, off: Int, sampleSizeInBytes: Int): Float {
-            return when (sourceFormat.encoding) {
-                AudioFormat.ENCODING_PCM_8BIT -> {
-                    assert(sampleSizeInBytes == 1)
-                    (src[off].toFloat().absoluteValue / Byte.MAX_VALUE.toFloat()) * Float.MAX_VALUE
-                }
-                AudioFormat.ENCODING_PCM_16BIT -> {
-                    assert(sampleSizeInBytes == 2)
-                    // the input data is LE, but java runs on BE
-                    val byte0 = src[off + 0].toInt() and 0xFF
-                    val byte1 = src[off + 1].toInt() and 0xFF
-                    val value = ((byte1 shl 8) or byte0).toShort()
-                    (value.toFloat().absoluteValue / (Short.MAX_VALUE.toFloat())) * Float.MAX_VALUE
-                }
-                AudioFormat.ENCODING_PCM_24BIT_PACKED -> {
-                    assert(sampleSizeInBytes == 2)
-                    // the input data is LE, but java runs on BE
-                    val byte0 = src[off + 0].toInt() and 0xFF
-                    val byte1 = src[off + 1].toInt() and 0xFF
-                    val byte2 = src[off + 2].toInt() and 0xFF
-                    val value = (byte2 shl 16) or (byte1 shl 8) or byte0
-                    (value.toFloat().absoluteValue / MAX_SAMPLE_24BIT_INT) * Float.MAX_VALUE
-                }
-                AudioFormat.ENCODING_PCM_32BIT -> {
-                    // the input data is LE, but java runs on BE
-                    val byte0 = src[off + 0].toInt() and 0xFF
-                    val byte1 = src[off + 1].toInt() and 0xFF
-                    val byte2 = src[off + 2].toInt() and 0xFF
-                    val byte3 = src[off + 3].toInt() and 0xFF
-                    val value = (byte3 shl 24) or (byte2 shl 16) or (byte1 shl 8) or byte0
-                    ((value.toDouble().absoluteValue / MAX_SAMPLE_32BIT_INT) * Float.MAX_VALUE.toDouble()).toFloat()
-                }
-                AudioFormat.ENCODING_PCM_FLOAT -> {
-                    val byte0 = src[off + 0].toInt() and 0xFF
-                    val byte1 = src[off + 1].toInt() and 0xFF
-                    val byte2 = src[off + 2].toInt() and 0xFF
-                    val byte3 = src[off + 3].toInt() and 0xFF
-                    Float.fromBits((byte3 shl 24) or (byte2 shl 16) or (byte1 shl 8) or byte0)
-                }
-                else -> throw RuntimeException("unsupported format")
-            }
-        }
-
         private fun accumulateSampleForStatus(accumulator: Float, nextSample: Float): Float {
             return max(accumulator, nextSample)
-        }
-
-        /**
-         * Given a buffer that points to the start of a frame where a single sample is [sampleSizeInBytes] long,
-         * writes the bytes that correspond to the sample with index [sampleIndexInFrame] to [dst], starting at index [dstOff].
-         * @param sampleSizeInBytes see [AudioFormat.getEncoding] and [SAMPLE_SIZE_IN_BYTES_BY_ENCODING]
-         * @param dst should be 4 bytes of size to be able to accommodate all encodings
-         */
-        private fun extractSampleBytes(
-            compoundFrame: ByteBuffer,
-            sampleSizeInBytes: Int,
-            sampleIndexInFrame: Int,
-            dst: ByteArray,
-            dstOff: Int,
-        ) {
-            val indexOfFirst = sampleIndexInFrame * sampleSizeInBytes
-            val indexOfLast = indexOfFirst + sampleSizeInBytes - 1
-            if (compoundFrame.remaining() < indexOfLast) {
-                throw BufferUnderflowException()
-            }
-
-            for (byteIndex in 0 until sampleSizeInBytes) {
-                dst[dstOff + byteIndex] = compoundFrame.get(compoundFrame.position() + indexOfFirst + byteIndex)
-            }
         }
 
         fun finishTake() {
