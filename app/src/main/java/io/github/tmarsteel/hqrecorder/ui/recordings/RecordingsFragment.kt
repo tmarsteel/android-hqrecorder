@@ -119,7 +119,7 @@ class RecordingsFragment : Fragment(), RecordingsTracksAdapter.TrackActionListen
                 do {
                     trackListAdapter.add(TrackInfo.fromMediaStoreCursor(cursor, queryFromUri))
                     cursor.moveToNext()
-                } while (!cursor.isLast)
+                } while (!cursor.isAfterLast)
 
                 trackListLoadedAtLeastOnce = true
             }
