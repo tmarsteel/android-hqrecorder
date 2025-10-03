@@ -2,21 +2,37 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
+    android:orientation="horizontal"
     android:paddingVertical="@dimen/activity_vertical_margin"
     >
-    <TextView
-        android:id="@+id/recordings_track_item_title"
-        android:layout_width="match_parent"
+    <LinearLayout
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textSize="18sp"
-        android:textColor="@color/text_on_surface_primary"
-        />
-    <TextView
-        android:id="@+id/recordings_track_item_metrics"
-        android:layout_width="match_parent"
+        android:orientation="vertical"
+        android:layout_weight="1"
+        >
+        <TextView
+            android:id="@+id/recordings_track_item_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="18sp"
+            android:textColor="@color/text_on_surface_primary"
+            />
+        <TextView
+            android:id="@+id/recordings_track_item_metrics"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="@color/text_on_surface_secondary"
+            />
+    </LinearLayout>
+    <ImageButton
+        android:id="@+id/recordings_track_item_share_bt"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textSize="12sp"
-        android:textColor="@color/text_on_surface_secondary"
+        android:src="@drawable/ic_share_32"
+        android:contentDescription="@string/recordings_item_share"
+        android:layout_weight="0"
+        android:scaleType="centerInside"
         />
 </LinearLayout>

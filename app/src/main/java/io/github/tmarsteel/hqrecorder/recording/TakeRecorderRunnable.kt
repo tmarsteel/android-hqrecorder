@@ -260,6 +260,7 @@ class TakeRecorderRunnable private constructor(
                     MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                     mediaStoreValues
                 )!!
+                Log.d(javaClass.name, "Recording track ${track.id} of take $takeTimestamp to $mediaUri")
             }
 
             fun writeSampleData(src: ByteArray, off: Int, len: Int) {

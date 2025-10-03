@@ -1,5 +1,6 @@
 package io.github.tmarsteel.hqrecorder.ui.recordings
 
+import android.content.Intent
 import android.os.Bundle
 import android.os.CancellationSignal
 import android.os.OperationCanceledException
@@ -9,10 +10,11 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
+import io.github.tmarsteel.hqrecorder.R
 import io.github.tmarsteel.hqrecorder.databinding.FragmentRecordingsBinding
 import kotlin.concurrent.thread
 
-class RecordingsFragment : Fragment() {
+class RecordingsFragment : Fragment(), RecordingsTracksAdapter.TrackActionListener {
 
     private var _binding: FragmentRecordingsBinding? = null
 
@@ -29,6 +31,7 @@ class RecordingsFragment : Fragment() {
         super.onCreate(savedInstanceState)
 
         trackListAdapter = RecordingsTracksAdapter(requireContext())
+        trackListAdapter.trackActionListener = this
     }
 
     override fun onCreateView(
@@ -54,6 +57,18 @@ class RecordingsFragment : Fragment() {
         }
     }
 
+    override fun onShareTrack(track: TrackInfo) {
+        val chooserIntent = Intent.createChooser(
+            Intent().apply {
+                action = Intent.ACTION_SEND
+                putExtra(Intent.EXTRA_STREAM, track.contentUri)
+                type = track.mimeType
+            },
+            requireContext().getString(R.string.recordings_item_share_choosertitle).format(track.filename),
+        )
+        startActivity(chooserIntent)
+    }
+
     private fun triggerRefresh() {
         trackListRefreshCancellationSignal?.cancel()
         currentRefreshThread?.interrupt()
@@ -64,11 +79,12 @@ class RecordingsFragment : Fragment() {
         binding.recordingsLoadingBar.visibility = View.VISIBLE
 
         currentRefreshThread = thread(name = "track-list-refresh", start = true) {
+            val queryFromUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
             val cursor = try {
                 requireContext().contentResolver.query(
-                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                    queryFromUri,
                     TrackInfo.COLUMN_NAMES,
-                    "owner_package_name = ?",
+                    "owner_package_name = ? AND is_trashed = 0",
                     arrayOf("io.github.tmarsteel.hqrecorder"),
                     "date_added DESC",
                     trackListRefreshCancellationSignal,
@@ -101,7 +117,7 @@ class RecordingsFragment : Fragment() {
                 }
 
                 do {
-                    trackListAdapter.add(TrackInfo.fromMediaStoreCursor(cursor))
+                    trackListAdapter.add(TrackInfo.fromMediaStoreCursor(cursor, queryFromUri))
                     cursor.moveToNext()
                 } while (!cursor.isLast)
 

@@ -30,6 +30,8 @@
     <string name="stereo">Stereo</string>
     <string name="recordings_metrics">%2$,d Hz %1$dbit</string>
     <string name="recordings_no_items">No recordings stored.</string>
+    <string name="recordings_item_share">Share/export this recording.</string>
+    <string name="recordings_item_share_choosertitle">Share recording %s</string>
 
     <string name="notification_record_ready">Ready to record.</string>
 
