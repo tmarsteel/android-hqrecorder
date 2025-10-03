@@ -109,16 +109,16 @@ class SettingsFragment : Fragment(), MenuProvider {
                 id: Long
             ) {
                 val deviceWithMask = parent.adapter.getItem(position) as AudioDeviceWithChannelMask
-                val samplingRatesAdapter = binding.settingsSamplingRateSpinner.adapter as ArrayAdapter<Int>
-                samplingRatesAdapter.clear()
-                samplingRatesAdapter.addAll(deviceWithMask.device.sampleRates.toList().sorted())
+                samplingRateAdapter.clear()
+                samplingRateAdapter.addAll(deviceWithMask.device.sampleRates.toList().sorted())
+                binding.settingsSamplingRateSpinner.setSelectedItemByPredicate<Int> { it == recordingConfigViewModel.config?.samplingRate }
 
-                val bitDepthsAdapter = binding.settingsSampleEncodingSpinner.adapter as ArrayAdapter<SampleEncoding>
-                bitDepthsAdapter.clear()
+                sampleEncodingAdapter.clear()
                 enumValues<SampleEncoding>()
                     .filter { it.encodingValue in deviceWithMask.device.encodings }
                     .sortedBy { it.ordinal }
-                    .forEach { bitDepthsAdapter.add(it) }
+                    .forEach { sampleEncodingAdapter.add(it) }
+                binding.settingsSampleEncodingSpinner.setSelectedItemByPredicate<SampleEncoding> { it.encodingValue == recordingConfigViewModel.config?.encoding }
 
                 trackConfigAdapter.channelMask = deviceWithMask.channelMask
             }
