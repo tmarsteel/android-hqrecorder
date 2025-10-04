@@ -128,6 +128,7 @@ class SettingsFragment : Fragment(), MenuProvider {
             }
         }
 
+        audioDeviceAdapter.clear()
         audioDeviceCallback.onAudioDevicesAdded(audioManager!!.getDevices(AudioManager.GET_DEVICES_INPUTS))
         audioManager!!.registerAudioDeviceCallback(audioDeviceCallback, null)
 
