@@ -18,3 +18,12 @@ fun <OriginalKey, OriginalValue> Map<OriginalKey, OriginalValue>.inverse(
 
     return into
 }
+
+fun <T> Iterable<T>.sumOfFloats(selector: (T) -> Float): Float {
+    var sum = 0.0f
+    for (e in this) {
+        sum += selector(e)
+    }
+
+    return sum
+}

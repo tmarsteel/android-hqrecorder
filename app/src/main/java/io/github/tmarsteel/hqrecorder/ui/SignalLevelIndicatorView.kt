@@ -12,8 +12,11 @@ import android.view.View
 import io.github.tmarsteel.hqrecorder.R
 import io.github.tmarsteel.hqrecorder.util.getRelationToInDecibels
 import io.github.tmarsteel.hqrecorder.util.getSampleLevelAsDecibelText
+import io.github.tmarsteel.hqrecorder.util.sumOfFloats
+import java.util.LinkedList
 import kotlin.math.absoluteValue
 import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.nanoseconds
 import kotlin.time.Duration.Companion.seconds
@@ -72,7 +75,6 @@ class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : 
     var clipIndicator: Boolean = false
         set(value) {
             field = value
-            postInvalidate()
             levelTextBackgroundPaint.color = if (field) {
                 context.resources.getColor(R.color.signal_level_db_background_clipped, null)
             } else {
@@ -81,16 +83,28 @@ class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : 
         }
 
     var minVolumeInDecibels: Float = -80.0f
+        set(value) {
+            require(value < 0.0f)
+            field = value
+        }
+
+    var preferredTickSpacingInDecibels: UInt = 6u
+        set(value) {
+            require(value > 0u)
+            field = value
+        }
 
     private var tmpRect = Rect()
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val reservedSpaceForTickLines = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 10.0f, resources.displayMetrics).floor()
+
         val width = MeasureSpec.getSize(widthMeasureSpec)
         val heightMode = MeasureSpec.getMode(heightMeasureSpec)
         val heightSize = MeasureSpec.getSize(heightMeasureSpec)
         val height = if (heightMode == MeasureSpec.EXACTLY) heightSize else {
             measuredTextChannelIndicator.getBounds(0, channelIndicator.length, tmpRect)
-            var minHeight = tmpRect.height()
+            var minHeight = tmpRect.height() + reservedSpaceForTickLines
             measuredTextPeakSignalLevel.getBounds(0, peakSignalLevelText.length, tmpRect)
             minHeight = minHeight.coerceAtLeast(tmpRect.height())
             minHeight += minHeight / 3 // for spacing
@@ -103,6 +117,9 @@ class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : 
             }
         }
         this.setMeasuredDimension(width, height)
+
+        xPosSampleIndicationEnd = width - widthForPeakLevelText
+        onLayoutUpdateTicks(height)
     }
 
     private val paintBackground = Paint().apply {
@@ -115,6 +132,10 @@ class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : 
     private val textPaint = Paint().apply {
         color = context.resources.getColor(com.google.android.material.R.color.design_default_color_on_primary, null)
         textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 14.0f, resources.displayMetrics)
+    }
+    private val tickTextPaint = Paint().apply {
+        color = textPaint.color
+        textSize = textPaint.textSize * 0.66f
     }
     private val threeSp = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 3.0f, resources.displayMetrics)
     private val twoSpCeiled = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 2.0f, resources.displayMetrics).ceil()
@@ -129,6 +150,56 @@ class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : 
         clipIndicator = clipIndicator
     }
 
+    private val xPosSampleIndicationStart: Int = 0
+    private val peakLevelTextWidth: Float = measuredTextLongestLevelText.getWidth(0, 8)
+    private var widthForPeakLevelText: Int = (peakLevelTextWidth + threeSp * 2).ceil()
+    private var xPosSampleIndicationEnd: Int = 0
+
+    private var ticks = emptyList<Tick>()
+    private val minSpacingBetweenTicks: Float = threeSp
+    private val tickTextHeight = tickTextPaint.textSize
+    private var tickIndicatorHeight = 5.0f
+    private var topTickIndicatorEndY = 0
+    private var bottomTickIndicatorStartY = 0
+
+    private fun onLayoutUpdateTicks(height: Int) {
+        val widthOfAreaIndicatedWithTicks = xPosSampleIndicationEnd - xPosSampleIndicationStart
+        val newTicks = (0 downTo minVolumeInDecibels.floor().toInt())
+            .step(preferredTickSpacingInDecibels.toInt())
+            .map { levelForTick ->
+                val text = levelForTick.toString(10) + "dB"
+                val mt = MeasuredText.Builder(text.toCharArray())
+                    .appendStyleRun(tickTextPaint, text.length, false)
+                    .build()
+
+                Tick(levelForTick.toFloat(), text, mt)
+            }
+            .toCollection(LinkedList())
+
+        while (newTicks.isNotEmpty()) {
+            val widthNeededForTicks: Float = newTicks.sumOfFloats { it.measuredText.getWidth(0, it.text.length) } + (minSpacingBetweenTicks * (newTicks.size - 1).toFloat())
+
+            if (widthNeededForTicks <= widthOfAreaIndicatedWithTicks.toFloat()) {
+                break
+            }
+
+            val ticksListIt = newTicks.listIterator()
+            while (ticksListIt.hasNext()) {
+                ticksListIt.next()
+                ticksListIt.remove()
+                if (ticksListIt.hasNext()) {
+                    ticksListIt.next()
+                }
+            }
+        }
+
+        ticks = newTicks
+
+        tickIndicatorHeight = ((height.toFloat() - tickTextHeight - tickTextHeight / 2.0f) / 2.0f)
+        topTickIndicatorEndY = tickIndicatorHeight.ceil()
+        bottomTickIndicatorStartY = (height.toFloat() - tickIndicatorHeight).ceil()
+    }
+
     override fun onDraw(canvas: Canvas) {
         canvas.drawPaint(paintBackground)
 
@@ -136,18 +207,14 @@ class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : 
         val canvasWidth = tmpRect.width()
         val canvasHeight = tmpRect.height()
 
-        val peakLevelTextWidth = measuredTextLongestLevelText.getWidth(0, 8) + threeSp * 2
-
-        val sampleDecibels = sampleValue.getRelationToInDecibels(Float.MAX_VALUE).coerceIn(minVolumeInDecibels, 0.0f)
-        val nPixelsForLevel = ((1.0f - sampleDecibels / minVolumeInDecibels) * canvasWidth.toFloat() - peakLevelTextWidth).toInt()
-        tmpRect.set(tmpRect.left, tmpRect.top, tmpRect.left + nPixelsForLevel, tmpRect.bottom)
+        val currentSampleXPos = sampleToXPosition(sampleValue, 0.0f)
+        tmpRect.set(tmpRect.left, tmpRect.top, tmpRect.left + currentSampleXPos, tmpRect.bottom)
         canvas.drawRect(tmpRect, paintLevel)
 
         tmpRect.set((canvasWidth - peakLevelTextWidth).toInt(), 0, canvasWidth, canvasHeight)
         canvas.drawRect(tmpRect, levelTextBackgroundPaint)
 
-        val temporaryPeakDecibels = temporaryPeakSample.getRelationToInDecibels(Float.MAX_VALUE).coerceIn(minVolumeInDecibels, 0.0f)
-        val horizontalPositionPeakDecibel = ((1.0f - temporaryPeakDecibels / minVolumeInDecibels) * canvasWidth.toFloat() - peakLevelTextWidth).toInt()
+        val horizontalPositionPeakDecibel = sampleToXPosition(temporaryPeakSample, twoSpCeiled.toFloat())
         tmpRect.set(horizontalPositionPeakDecibel, 0, horizontalPositionPeakDecibel + twoSpCeiled, canvasHeight)
         canvas.drawRect(tmpRect, paintLevel)
 
@@ -160,12 +227,57 @@ class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : 
         )
 
         measuredTextChannelIndicator.getBounds(0, channelIndicator.length, tmpRect)
+        val channelIndicatorEndX = (threeSp * 2.0f).ceil() + tmpRect.width()
         canvas.drawText(
             channelIndicator,
             threeSp,
             canvasHeight.toFloat() / 2 + tmpRect.height() / 2,
             textPaint
         )
+
+        for (tick in ticks) {
+            val topAndBottomIndicatorsXPos = decibelValueToXPosition(tick.decibels, twoSpCeiled.toFloat())
+            tmpRect.set(topAndBottomIndicatorsXPos, 0, topAndBottomIndicatorsXPos + twoSpCeiled, topTickIndicatorEndY)
+            canvas.drawRect(tmpRect, tickTextPaint)
+
+            tmpRect.set(topAndBottomIndicatorsXPos, bottomTickIndicatorStartY, topAndBottomIndicatorsXPos + twoSpCeiled, height)
+            canvas.drawRect(tmpRect, tickTextPaint)
+
+            tick.measuredText.getBounds(0, tick.text.length, tmpRect)
+            val textLeftEdge = decibelValueToXPosition(tick.decibels, tmpRect.width().toFloat())
+            if (textLeftEdge < channelIndicatorEndX && channelIndicator.isNotBlank()) {
+                // tick label would overlap channel indicator
+                continue
+            }
+
+            canvas.drawText(
+                tick.text,
+                textLeftEdge.toFloat(),
+                canvasHeight.toFloat() / 2 + tmpRect.height() / 2,
+                tickTextPaint
+            )
+        }
+    }
+
+    /**
+     * see [decibelValueToXPosition]; used after converting [sampleValue] to a decibel value
+     */
+    private fun sampleToXPosition(sampleValue: Float, indicatorWidth: Float): Int {
+        val sampleDecibels = sampleValue.getRelationToInDecibels(Float.MAX_VALUE).coerceIn(minVolumeInDecibels, 0.0f)
+        return decibelValueToXPosition(sampleDecibels, indicatorWidth)
+    }
+
+    /**
+     * @param indicatorWidth may be 0
+     * @return the pixel between [xPosSampleIndicationStart] and [xPosSampleIndicationEnd]
+     * where to start drawing an indicator of width [indicatorWidth] so that its center aligns
+     * as closely as possible with the [decibels], according to [minVolumeInDecibels].
+     */
+    private fun decibelValueToXPosition(decibels: Float, indicatorWidth: Float): Int {
+        val centerPositionOfIndicator = xPosSampleIndicationStart + ((1.0f - decibels / minVolumeInDecibels) * (xPosSampleIndicationEnd - xPosSampleIndicationStart).toFloat())
+        val indicatorLeftEdge = (centerPositionOfIndicator.ceil() - indicatorWidth / 2.0f).floor()
+
+        return indicatorLeftEdge
     }
 
     fun update(peakSampleOfBatch: Float) {
@@ -204,8 +316,18 @@ class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : 
         reset()
         return true
     }
+
+    private data class Tick(
+        val decibels: Float,
+        val text: String,
+        val measuredText: MeasuredText,
+    )
 }
 
 private fun Float.ceil(): Int {
     return ceil(toDouble()).toInt()
+}
+
+private fun Float.floor(): Int {
+    return floor(toDouble()).toInt()
 }
