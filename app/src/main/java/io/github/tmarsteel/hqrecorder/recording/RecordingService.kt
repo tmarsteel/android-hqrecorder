@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.graphics.drawable.Icon
 import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -32,6 +33,7 @@ const val NOTIFICATION_ID_RECORDING_SERVICE_FG = 1
 
 class RecordingService : Service() {
     private lateinit var audioManager: AudioManager
+    private lateinit var notificationManager: NotificationManager
 
     override fun onBind(intent: Intent): IBinder {
         val handler = IncomingHandler(applicationContext.mainLooper)
@@ -39,19 +41,16 @@ class RecordingService : Service() {
     }
 
     override fun onCreate() {
+        notificationManager = getSystemService<NotificationManager>()!!
+        val notification = createNotification(currentlyRecording = false)
+
         assureNotificationChannelExists()
-        val notification = Notification.Builder(this, NOTIFICATION_CHANNEL_ID_RECORDING_SERVICE)
-            .setContentTitle(getString(R.string.notification_record_ready))
-            .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_DEFERRED)
-            .setLocalOnly(true)
-            .build()
         startForeground(NOTIFICATION_ID_RECORDING_SERVICE_FG, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
 
         audioManager = getSystemService(AudioManager::class.java)
     }
 
     private fun assureNotificationChannelExists() {
-        val notificationManager = getSystemService<NotificationManager>()!!
         if (notificationManager.getNotificationChannel(NOTIFICATION_CHANNEL_ID_RECORDING_SERVICE) != null) {
             return
         }
@@ -68,6 +67,25 @@ class RecordingService : Service() {
         }
 
         notificationManager.createNotificationChannel(channel)
+    }
+
+    private fun createNotification(currentlyRecording: Boolean): Notification {
+        return Notification.Builder(this, NOTIFICATION_CHANNEL_ID_RECORDING_SERVICE)
+            .setContentText(getString(if (currentlyRecording) {
+                R.string.notification_record_recording
+            } else {
+                R.string.notification_record_ready
+            }))
+            .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_DEFERRED)
+            .setLocalOnly(true)
+            .setOngoing(true)
+            .setSmallIcon(R.drawable.ic_recording_notification)
+            .build()
+    }
+
+    private fun updateNotification(currentlyRecording: Boolean) {
+        val notification = createNotification(currentlyRecording)
+        notificationManager.notify(NOTIFICATION_ID_RECORDING_SERVICE_FG, notification)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -329,6 +347,7 @@ class RecordingService : Service() {
             (statusSubscribers + listOfNotNull(subscriber)).forEach {
                 it.send(finalStatusUpdate)
             }
+            updateNotification(currentlyRecording = false)
         }
 
         override fun startOrStopListening(
@@ -363,8 +382,12 @@ class RecordingService : Service() {
         }
 
         override fun startNewTake(): StartNewTakeCommand.Response {
+            val wasRecordingBefore = listeningThread.isAlive && listeningRunnable.isRecording
             assureTakeFinished()
             listeningRunnable.executeCommandSync(TakeRecorderRunnable.Command.NextTake)
+            if (!wasRecordingBefore) {
+                updateNotification(currentlyRecording = true)
+            }
             return StartNewTakeCommand.Response(
                 StartNewTakeCommand.Response.Result.RECORDING
             )
