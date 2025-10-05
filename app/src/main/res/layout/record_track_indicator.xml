@@ -14,13 +14,7 @@
         />
 
     <io.github.tmarsteel.hqrecorder.ui.SignalLevelIndicator
-        android:id="@+id/record_track_indicator_left_or_mono"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        />
-
-    <io.github.tmarsteel.hqrecorder.ui.SignalLevelIndicator
-        android:id="@+id/record_track_indicator_right"
+        android:id="@+id/record_track_indicator"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         />

@@ -7,7 +7,6 @@ import android.graphics.Rect
 import android.graphics.text.MeasuredText
 import android.util.AttributeSet
 import android.util.TypedValue
-import android.view.MotionEvent
 import android.view.View
 import io.github.tmarsteel.hqrecorder.R
 import io.github.tmarsteel.hqrecorder.util.getRelationToInDecibels
@@ -23,59 +22,18 @@ import kotlin.time.Duration.Companion.seconds
 
 class SignalLevelIndicator(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
     var indicatesTrackId: Long? = null
-    /** false = left, true = true */
-    var indicatesLeftOrRight: Boolean = false
 
-    private var measuredTextChannelIndicator: MeasuredText = MeasuredText.Builder(charArrayOf())
-        .build()
-    private var measuredTextPeakSignalLevel: MeasuredText = measuredTextChannelIndicator
-    private var peakSignalLevelText: String = getSampleLevelAsDecibelText(0.0f)
-
-    var channelIndicator: String = "L"
-        set(value) {
-            field = value
-            var mtBuilder = MeasuredText.Builder(value.toCharArray())
-            if (value.isNotEmpty()) {
-                mtBuilder = mtBuilder.appendStyleRun(textPaint, value.length, false)
-            }
-            measuredTextChannelIndicator = mtBuilder.build()
-            postInvalidate()
-        }
-
-    /**
-     * the level to display, as a sample value adjusted to 32BIT integer
-     */
-    var sampleValue: Float = 0.0f
-        set(value) {
-            field = value.absoluteValue
-        }
-
-    var temporaryPeakSampleLastResetAt: Long = System.nanoTime()
-        private set
-    var temporaryPeakSample: Float = 0.0f
-        set(value) {
-            field = value.absoluteValue
-        }
-
-    var peakSample: Float = 0.0f
-        set(value) {
-            field = value
-            peakSignalLevelText = getSampleLevelAsDecibelText(value.absoluteValue)
-            val textChars = peakSignalLevelText.toCharArray()
-            measuredTextPeakSignalLevel = MeasuredText.Builder(textChars)
-                .appendStyleRun(textPaint, textChars.size, false)
-                .build()
-        }
+    private var temporaryPeakSampleLastResetAt: Long = System.nanoTime()
 
     var temporaryPeakDuration: Duration = 2.seconds
 
     /**
      * true indicates that the signal has clipped
      */
-    var clipIndicator: Boolean = false
+    var signalHasClipped: Boolean = false
         set(value) {
             field = value
-            levelTextBackgroundPaint.color = if (field) {
+            peakLevelTextBackgroundPaint.color = if (field) {
                 context.resources.getColor(R.color.signal_level_db_background_clipped, null)
             } else {
                 context.resources.getColor(R.color.signal_level_db_background, null)
@@ -96,39 +54,13 @@ class SignalLevelIndicator(context: Context, attrs: AttributeSet? = null) : View
 
     private var tmpRect = Rect()
 
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val reservedSpaceForTickLines = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 10.0f, resources.displayMetrics).floor()
-
-        val width = MeasureSpec.getSize(widthMeasureSpec)
-        val heightMode = MeasureSpec.getMode(heightMeasureSpec)
-        val heightSize = MeasureSpec.getSize(heightMeasureSpec)
-        val height = if (heightMode == MeasureSpec.EXACTLY) heightSize else {
-            measuredTextChannelIndicator.getBounds(0, channelIndicator.length, tmpRect)
-            var minHeight = tmpRect.height() + reservedSpaceForTickLines
-            measuredTextPeakSignalLevel.getBounds(0, peakSignalLevelText.length, tmpRect)
-            minHeight = minHeight.coerceAtLeast(tmpRect.height())
-            minHeight += minHeight / 3 // for spacing
-
-            if (heightMode == MeasureSpec.AT_MOST) {
-                minHeight.coerceAtMost(heightSize)
-            } else {
-                // unspecified
-                minHeight
-            }
-        }
-        this.setMeasuredDimension(width, height)
-
-        xPosSampleIndicationEnd = width - widthForPeakLevelText
-        onLayoutUpdateTicks(height)
-    }
-
     private val paintBackground = Paint().apply {
         color = context.resources.getColor(R.color.signal_level_background, null)
     }
     private val paintLevel = Paint().apply {
         color = context.resources.getColor(com.google.android.material.R.color.design_default_color_primary, null)
     }
-    private val levelTextBackgroundPaint = Paint()
+    private val peakLevelTextBackgroundPaint = Paint()
     private val textPaint = Paint().apply {
         color = context.resources.getColor(com.google.android.material.R.color.design_default_color_on_primary, null)
         textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 14.0f, resources.displayMetrics)
@@ -142,12 +74,81 @@ class SignalLevelIndicator(context: Context, attrs: AttributeSet? = null) : View
     private val measuredTextLongestLevelText = MeasuredText.Builder("-100.0dB".toCharArray())
         .appendStyleRun(textPaint, 8, false)
         .build()
+    private val tempPeakAndTickLineThickness = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 2.0f, resources.displayMetrics).ceil()
+    private val tickMarkMinHeight = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 4.0f, resources.displayMetrics).floor()
+
+    private var channelData = arrayOf<ChannelStatus>(ChannelStatus("L"))
+
+    /**
+     * Sets the amount of channels being displayed in this indicator and the names of them.
+     * This also resets the state of all channels (as if [reset] was called).
+     *
+     * @param names must not be empty
+     */
+    fun setChannelNames(names: Array<String>) {
+        require(names.isNotEmpty())
+
+        channelData = Array(names.size) { idx ->
+            ChannelStatus(names[idx])
+        }
+        postInvalidate()
+    }
+
+    private lateinit var measuredTextTotalPeakSignalLevel: MeasuredText
+    private var peakSignalLevelText: String = getSampleLevelAsDecibelText(0.0f)
+        set(value) {
+            field = value
+            measuredTextTotalPeakSignalLevel = MeasuredText.Builder(field.toCharArray())
+                .appendStyleRun(textPaint, field.length, false)
+                .build()
+        }
+    private var totalPeakSample: Float = 0.0f
+        set(value) {
+            field = value.absoluteValue
+            peakSignalLevelText = getSampleLevelAsDecibelText(field)
+        }
 
     init {
-        // assure initialization, needs the paint objects
-        peakSample = peakSample
-        channelIndicator = channelIndicator
-        clipIndicator = clipIndicator
+        // force initialization of total peak sample
+        totalPeakSample = 0.0f
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val reservedSpaceForTickLines = tickMarkMinHeight * 2
+
+        val width = MeasureSpec.getSize(widthMeasureSpec)
+        val heightMode = MeasureSpec.getMode(heightMeasureSpec)
+        val heightSize = MeasureSpec.getSize(heightMeasureSpec)
+        val height = if (heightMode == MeasureSpec.EXACTLY) heightSize else {
+            measuredTextLongestLevelText.getBounds(0, 8, tmpRect)
+            val heightForOneChannel = tmpRect.height() * 4 / 3
+            val minHeight = heightForOneChannel * channelData.size + reservedSpaceForTickLines
+
+            if (heightMode == MeasureSpec.AT_MOST) {
+                minHeight.coerceAtMost(heightSize)
+            } else {
+                // unspecified
+                minHeight
+            }
+        }
+        this.setMeasuredDimension(width, height)
+
+        onMeasureAllocateChannelHeights(height)
+
+        xPosSampleIndicationEnd = width - widthForPeakLevelText
+        onLayoutUpdateTicks(height)
+    }
+
+    private fun onMeasureAllocateChannelHeights(height: Int) {
+        val heightPerChannelFloored = height / channelData.size
+        val heightRemainder = height - (channelData.size * heightPerChannelFloored)
+        var currentYPos = 0
+        channelData.forEachIndexed { channelIndex, channelData ->
+            val thisChannelHeight = heightPerChannelFloored + if (channelIndex <= heightRemainder) 1 else 0
+            channelData.topY = currentYPos
+            channelData.bottomY = currentYPos + thisChannelHeight
+            currentYPos = channelData.bottomY
+        }
     }
 
     private val xPosSampleIndicationStart: Int = 0
@@ -201,61 +202,75 @@ class SignalLevelIndicator(context: Context, attrs: AttributeSet? = null) : View
     }
 
     override fun onDraw(canvas: Canvas) {
+        val viewWidth = measuredWidth
+        val viewHeight = measuredHeight
+
         canvas.drawPaint(paintBackground)
 
-        canvas.getClipBounds(tmpRect)
-        val canvasWidth = tmpRect.width()
-        val canvasHeight = tmpRect.height()
-
-        val currentSampleXPos = sampleToXPosition(sampleValue, 0.0f)
-        tmpRect.set(tmpRect.left, tmpRect.top, tmpRect.left + currentSampleXPos, tmpRect.bottom)
-        canvas.drawRect(tmpRect, paintLevel)
-
-        tmpRect.set((canvasWidth - peakLevelTextWidth).toInt(), 0, canvasWidth, canvasHeight)
-        canvas.drawRect(tmpRect, levelTextBackgroundPaint)
-
-        val horizontalPositionPeakDecibel = sampleToXPosition(temporaryPeakSample, twoSpCeiled.toFloat())
-        tmpRect.set(horizontalPositionPeakDecibel, 0, horizontalPositionPeakDecibel + twoSpCeiled, canvasHeight)
-        canvas.drawRect(tmpRect, paintLevel)
-
-        measuredTextPeakSignalLevel.getBounds(0, peakSignalLevelText.length, tmpRect)
+        tmpRect.set((viewWidth - peakLevelTextWidth).toInt(), 0, viewWidth, viewHeight)
+        canvas.drawRect(tmpRect, peakLevelTextBackgroundPaint)
+        measuredTextTotalPeakSignalLevel.getBounds(0, peakSignalLevelText.length, tmpRect)
         canvas.drawText(
             peakSignalLevelText,
-            canvasWidth - tmpRect.width() - threeSp,
-            canvasHeight.toFloat() / 2 + tmpRect.height() / 2,
+            viewWidth - tmpRect.width() - threeSp,
+            viewHeight.toFloat() / 2 + tmpRect.height() / 2,
             textPaint
         )
 
-        measuredTextChannelIndicator.getBounds(0, channelIndicator.length, tmpRect)
-        val channelIndicatorEndX = (threeSp * 2.0f).ceil() + tmpRect.width()
-        canvas.drawText(
-            channelIndicator,
-            threeSp,
-            canvasHeight.toFloat() / 2 + tmpRect.height() / 2,
-            textPaint
-        )
+        var rightmostEndXOfChannelNames = 0
+        channelData.forEachIndexed { channelIndex, channelData ->
+            val currentSampleXPos = sampleToXPosition(channelData.currentSample, 0.0f)
+            tmpRect.set(0, channelData.topY, currentSampleXPos, channelData.bottomY)
+            canvas.drawRect(tmpRect, paintLevel)
 
-        for (tick in ticks) {
-            val topAndBottomIndicatorsXPos = decibelValueToXPosition(tick.decibels, twoSpCeiled.toFloat())
-            tmpRect.set(topAndBottomIndicatorsXPos, 0, topAndBottomIndicatorsXPos + twoSpCeiled, topTickIndicatorEndY)
-            canvas.drawRect(tmpRect, tickTextPaint)
+            val horizontalPositionTempPeak = sampleToXPosition(channelData.temporaryPeakSample, tempPeakAndTickLineThickness.toFloat())
+            tmpRect.set(horizontalPositionTempPeak, channelData.topY, horizontalPositionTempPeak + tempPeakAndTickLineThickness, channelData.bottomY)
+            canvas.drawRect(tmpRect, paintLevel)
 
-            tmpRect.set(topAndBottomIndicatorsXPos, bottomTickIndicatorStartY, topAndBottomIndicatorsXPos + twoSpCeiled, height)
-            canvas.drawRect(tmpRect, tickTextPaint)
-
-            tick.measuredText.getBounds(0, tick.text.length, tmpRect)
-            val textLeftEdge = decibelValueToXPosition(tick.decibels, tmpRect.width().toFloat())
-            if (textLeftEdge < channelIndicatorEndX && channelIndicator.isNotBlank()) {
-                // tick label would overlap channel indicator
-                continue
-            }
-
+            channelData.nameMeasuredText.getBounds(0, channelData.name.length, tmpRect)
             canvas.drawText(
-                tick.text,
-                textLeftEdge.toFloat(),
-                canvasHeight.toFloat() / 2 + tmpRect.height() / 2,
-                tickTextPaint
+                channelData.name,
+                threeSp,
+                channelData.bottomY.toFloat() - (channelData.height.toFloat() / 2.0f) + (tmpRect.height().toFloat() / 2.0f),
+                textPaint
             )
+            val endXThisChannelsName = threeSp.ceil() + tmpRect.width()
+            rightmostEndXOfChannelNames = rightmostEndXOfChannelNames.coerceAtMost(endXThisChannelsName)
+        }
+
+        if (ticks.isEmpty()) {
+            return
+        }
+        val topTickStartY = 0
+        val tickTextVerticalPadding = tickTextHeight / 4.0f
+        val topTickEndYWithText = (viewHeight.toFloat() / 2.0f - tickTextHeight / 2.0f - tickTextVerticalPadding).floor()
+        val topTickEndYWithoutText = tickMarkMinHeight
+        val bottomTickStartYWithText = (viewHeight.toFloat() / 2.0f + tickTextHeight / 2.0f + tickTextVerticalPadding).ceil()
+        val bottomTickStartYWithoutText = viewHeight - tickMarkMinHeight
+        val bottomTickEndY = viewHeight
+        for (tick in ticks) {
+            val tickXPos = decibelValueToXPosition(tick.decibels, tempPeakAndTickLineThickness.toFloat())
+            tick.measuredText.getBounds(0, tick.text.length, tmpRect)
+            val tickTextXPos = decibelValueToXPosition(tick.decibels, tmpRect.width().toFloat())
+            val tickHasText = tickTextXPos >= rightmostEndXOfChannelNames + twoSpCeiled
+            if (tickHasText) {
+                tmpRect.set(tickXPos, topTickStartY, tickXPos + tempPeakAndTickLineThickness, topTickEndYWithText)
+                canvas.drawRect(tmpRect, tickTextPaint)
+                tmpRect.set(tmpRect.left, bottomTickStartYWithText, tmpRect.right, bottomTickEndY)
+                canvas.drawRect(tmpRect, tickTextPaint)
+
+                canvas.drawText(
+                    tick.text,
+                    tickTextXPos.toFloat(),
+                    viewHeight.toFloat() / 2.0f + tickTextHeight / 2.0f,
+                    tickTextPaint,
+                )
+            } else {
+                tmpRect.set(tickXPos, topTickStartY, tickXPos + tempPeakAndTickLineThickness, topTickEndYWithoutText)
+                canvas.drawRect(tmpRect, tickTextPaint)
+                tmpRect.set(tmpRect.left, bottomTickStartYWithoutText, tmpRect.right, bottomTickEndY)
+                canvas.drawRect(tmpRect, tickTextPaint)
+            }
         }
     }
 
@@ -280,41 +295,54 @@ class SignalLevelIndicator(context: Context, attrs: AttributeSet? = null) : View
         return indicatorLeftEdge
     }
 
-    fun update(peakSampleOfBatch: Float) {
-        if (sampleValue == peakSampleOfBatch) {
-            return
+    /**
+     * sets the level to display for each channel (matched to the data given to [setChannelNames] by index)
+     *
+     * @param currentSampleOfEachChannel for each channel: a sample indicative of the current level on the channel.
+     * Should be the maximum sample out of of all samples passed through the channel since the last call to [update] (e.g. one buffer full of samples)
+     * @param off offset to start reading [currentSampleOfEachChannel] from
+     * @param len the number of samples to read from [currentSampleOfEachChannel], must be identical to the number of channels given to [setChannelNames]
+     */
+    fun update(currentSampleOfEachChannel: FloatArray, off: Int, len: Int) {
+        if (currentSampleOfEachChannel.size < off + len) {
+            throw ArrayIndexOutOfBoundsException()
         }
-
-        sampleValue = peakSampleOfBatch
-        peakSample = peakSample.coerceAtLeast(peakSampleOfBatch)
-        clipIndicator = clipIndicator || peakSample.absoluteValue == Float.MAX_VALUE
+        require(len == channelData.size) {
+            "The indicator is configured for ${channelData.size} channels, but got $len samples in ${this::update.name}"
+        }
 
         val now = System.nanoTime()
         val timeSinceLastTempPeakSampleUpdate = (now - temporaryPeakSampleLastResetAt).nanoseconds
+        val shouldResetTempPeaks:  Boolean
         if (timeSinceLastTempPeakSampleUpdate >= temporaryPeakDuration) {
-            temporaryPeakSample = 0.0f
+            shouldResetTempPeaks = true
             temporaryPeakSampleLastResetAt = now
+        } else {
+            shouldResetTempPeaks = false
         }
-        temporaryPeakSample = temporaryPeakSample.coerceAtLeast(peakSampleOfBatch)
+
+        channelData.forEachIndexed { channelIndex, channelData ->
+            channelData.update(currentSampleOfEachChannel[off + channelIndex], shouldResetTempPeaks)
+        }
 
         postInvalidate()
     }
 
+    /**
+     * Resets the levels for all channels back to silent / -inf and clears [signalHasClipped].
+     */
     fun reset() {
-        sampleValue = 0.0f
-        peakSample = 0.0f
-        temporaryPeakSample = 0.0f
-        clipIndicator = false
+        channelData.forEach { it.reset() }
+        totalPeakSample = 0.0f
+        signalHasClipped = false
+        temporaryPeakSampleLastResetAt = System.nanoTime()
         postInvalidate()
     }
 
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.actionMasked != MotionEvent.ACTION_DOWN) {
-            return false
+    init {
+        setOnClickListener {
+            reset()
         }
-
-        reset()
-        return true
     }
 
     private data class Tick(
@@ -322,6 +350,52 @@ class SignalLevelIndicator(context: Context, attrs: AttributeSet? = null) : View
         val text: String,
         val measuredText: MeasuredText,
     )
+
+    private inner class ChannelStatus(val name: String) {
+        var currentSample: Float = 0.0f
+
+        var temporaryPeakSample: Float = 0.0f
+
+        var peakSample: Float = 0.0f
+
+        /**
+         * Y coordinate, relative to this views position, where this channel starts
+         */
+        var topY: Int = 0
+
+        /**
+         * Y coordinate, relative to this views position, where this channel ends
+         */
+        var bottomY: Int = 0
+
+        val height: Int get() = bottomY - topY
+
+        val nameMeasuredText = run {
+            val mtb = MeasuredText.Builder(name.toCharArray())
+            if (name.isNotBlank()) {
+                mtb.appendStyleRun(textPaint, name.length, false)
+            }
+            mtb.build()
+        }
+
+        fun update(currentSample: Float, resetTemporaryPeak: Boolean) {
+            this.currentSample = currentSample
+            peakSample = peakSample.coerceAtLeast(currentSample)
+            totalPeakSample = totalPeakSample.coerceAtLeast(currentSample)
+            signalHasClipped = signalHasClipped || peakSample.absoluteValue == Float.MAX_VALUE
+
+            if (resetTemporaryPeak) {
+                temporaryPeakSample = 0.0f
+            }
+            temporaryPeakSample = temporaryPeakSample.coerceAtLeast(currentSample)
+        }
+
+        fun reset() {
+            currentSample = 0.0f
+            peakSample = 0.0f
+            temporaryPeakSample = 0.0f
+        }
+    }
 }
 
 private fun Float.ceil(): Int {

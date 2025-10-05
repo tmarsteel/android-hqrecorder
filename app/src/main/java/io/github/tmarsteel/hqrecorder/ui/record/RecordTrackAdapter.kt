@@ -15,21 +15,12 @@ class RecordTrackAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputT
         val track = getItem(position)!!
         view.findViewById<TextView>(R.id.record_track_title).text = track.label
 
-        val leftLevel = view.findViewById<SignalLevelIndicator>(R.id.record_track_indicator_left_or_mono)
-        leftLevel.indicatesTrackId = track.id
-        leftLevel.indicatesLeftOrRight = false
-        leftLevel.channelIndicator = if (track.rightDeviceChannel == null) "" else "L"
-
-        val rightLevel = view.findViewById<SignalLevelIndicator>(R.id.record_track_indicator_right)
-        rightLevel.indicatesTrackId = track.id
-        rightLevel.channelIndicator = "R"
-        rightLevel.indicatesLeftOrRight = true
-
-        if (track.rightDeviceChannel != null) {
-            rightLevel.visibility = View.VISIBLE
-        } else{
-            rightLevel.visibility = View.INVISIBLE
-            rightLevel.indicatesTrackId = null
+        val indicator = view.findViewById<SignalLevelIndicator>(R.id.record_track_indicator)
+        indicator.indicatesTrackId = track.id
+        if (track.rightDeviceChannel == null) {
+            indicator.setChannelNames(arrayOf(""))
+        } else {
+            indicator.setChannelNames(arrayOf("L", "R"))
         }
 
         return view

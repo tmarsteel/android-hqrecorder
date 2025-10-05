@@ -37,7 +37,10 @@ class NonBlockingThreadRemoteControl(
             while (true) {
                 val result = resultQueue.getAcquire()
                 when (result) {
-                    is CommandResult.Response -> return result.response as Response
+                    is CommandResult.Response -> {
+                        @Suppress("UNCHECKED_CAST")
+                        return result.response as Response
+                    }
                     is CommandResult.Failed -> throw result.exception
                     null -> {
                         if (!controlledThread.isAlive) {

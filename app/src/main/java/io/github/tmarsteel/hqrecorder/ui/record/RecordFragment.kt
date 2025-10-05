@@ -181,15 +181,22 @@ class RecordFragment : Fragment() {
         }
     }
 
+    private val bufferForIndicatorUpdate = FloatArray(2)
     private fun onStatusUpdate(update: RecordingStatusServiceMessage) {
         view?.allViews
             ?.filterIsInstance<SignalLevelIndicator>()
             ?.forEach { indicator ->
                 val trackLevels = indicator.indicatesTrackId?.let(update.trackLevels::get)
                     ?: return@forEach
-                indicator.update(
-                    if (indicator.indicatesLeftOrRight) trackLevels.second ?: 0.0f else trackLevels.first
-                )
+
+                bufferForIndicatorUpdate[0] = trackLevels.first
+                val rightChannelSample = trackLevels.second
+                if (rightChannelSample == null) {
+                    indicator.update(bufferForIndicatorUpdate, 0, 1)
+                } else {
+                    bufferForIndicatorUpdate[1] = rightChannelSample
+                    indicator.update(bufferForIndicatorUpdate, 0, 2)
+                }
             }
 
         _binding?.let { binding ->

@@ -165,10 +165,8 @@ class SettingsFragment : Fragment(), MenuProvider {
                 trackConfigAdapter.channelMask = selectedDeviceWithMask.channelMask
             }
 
-            (binding.settingsTracksList.adapter as ArrayAdapter<RecordingConfig.InputTrackConfig>).also {
-                it.clear()
-                it.addAll(currentConfig.tracks)
-            }
+            trackConfigAdapter.clear()
+            trackConfigAdapter.addAll(currentConfig.tracks)
         }
     }
 
