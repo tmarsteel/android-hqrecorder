@@ -13,13 +13,13 @@
         app:layout_constraintEnd_toEndOf="parent"
         />
 
-    <io.github.tmarsteel.hqrecorder.ui.SignalLevelIndicatorView
+    <io.github.tmarsteel.hqrecorder.ui.SignalLevelIndicator
         android:id="@+id/record_track_indicator_left_or_mono"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         />
 
-    <io.github.tmarsteel.hqrecorder.ui.SignalLevelIndicatorView
+    <io.github.tmarsteel.hqrecorder.ui.SignalLevelIndicator
         android:id="@+id/record_track_indicator_right"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

@@ -4,7 +4,6 @@ import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.BaseAdapter
 import android.widget.Button
@@ -15,7 +14,6 @@ import io.github.tmarsteel.hqrecorder.R
 import io.github.tmarsteel.hqrecorder.recording.Channel
 import io.github.tmarsteel.hqrecorder.recording.ChannelMask
 import io.github.tmarsteel.hqrecorder.recording.RecordingConfig
-import io.github.tmarsteel.hqrecorder.ui.SignalLevelIndicatorView
 import io.github.tmarsteel.hqrecorder.util.setSelectedItemByPredicate
 
 class TrackConfigAdapter(context: Context) : ArrayAdapter<RecordingConfig.InputTrackConfig>(context, R.layout.view_settings_track_config, R.id.settings_track_label) {

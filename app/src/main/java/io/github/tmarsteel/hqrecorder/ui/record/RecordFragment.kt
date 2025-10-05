@@ -25,7 +25,7 @@ import io.github.tmarsteel.hqrecorder.recording.StartNewTakeCommand
 import io.github.tmarsteel.hqrecorder.recording.StartOrStopListeningCommand
 import io.github.tmarsteel.hqrecorder.recording.UpdateRecordingConfigCommand
 import io.github.tmarsteel.hqrecorder.ui.RecordingConfigViewModel
-import io.github.tmarsteel.hqrecorder.ui.SignalLevelIndicatorView
+import io.github.tmarsteel.hqrecorder.ui.SignalLevelIndicator
 import io.github.tmarsteel.hqrecorder.util.CoroutineServiceCommunicator
 import io.github.tmarsteel.hqrecorder.util.CoroutineServiceCommunicator.Companion.coDoWithService
 import kotlinx.coroutines.delay
@@ -183,7 +183,7 @@ class RecordFragment : Fragment() {
 
     private fun onStatusUpdate(update: RecordingStatusServiceMessage) {
         view?.allViews
-            ?.filterIsInstance<SignalLevelIndicatorView>()
+            ?.filterIsInstance<SignalLevelIndicator>()
             ?.forEach { indicator ->
                 val trackLevels = indicator.indicatesTrackId?.let(update.trackLevels::get)
                     ?: return@forEach

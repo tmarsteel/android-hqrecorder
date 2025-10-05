@@ -21,7 +21,7 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.nanoseconds
 import kotlin.time.Duration.Companion.seconds
 
-class SignalLevelIndicatorView(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
+class SignalLevelIndicator(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
     var indicatesTrackId: Long? = null
     /** false = left, true = true */
     var indicatesLeftOrRight: Boolean = false
