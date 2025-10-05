@@ -312,7 +312,7 @@ class TakeRecorderRunnable private constructor(
         /**
          * Delay between two polls to [AudioRecord.read]
          */
-        val AUDIO_POLL_DELAY = 50.milliseconds
+        val AUDIO_POLL_DELAY = 40.milliseconds
 
         fun setUpNewThread(
             context: Context,
