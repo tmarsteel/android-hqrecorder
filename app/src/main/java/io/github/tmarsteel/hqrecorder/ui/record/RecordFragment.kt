@@ -83,7 +83,10 @@ class RecordFragment : Fragment() {
                         }
                     }
                     finally {
-                        comm.sendToService(StartOrStopListeningCommand.buildMessage(start = false, statusSubscription = false))
+                        comm.sendToService(StartOrStopListeningCommand.buildMessage(
+                            listen = StartOrStopListeningCommand.ListeningAction.STOP,
+                            statusUpdates = StartOrStopListeningCommand.SubscriptionAction.UNSUBSCRIBE,
+                        ))
                     }
                 }
             }
@@ -152,7 +155,10 @@ class RecordFragment : Fragment() {
         }
 
         val startListenResponse = StartOrStopListeningCommand.Response.fromMessage(
-            comm.exchangeWithService(StartOrStopListeningCommand.buildMessage(start = true, statusSubscription = true))
+            comm.exchangeWithService(StartOrStopListeningCommand.buildMessage(
+                listen = StartOrStopListeningCommand.ListeningAction.START,
+                statusUpdates = StartOrStopListeningCommand.SubscriptionAction.SUBSCRIBE,
+            ))
         )!!
         when (startListenResponse.result) {
             StartOrStopListeningCommand.Response.Result.STILL_RECORDING -> {

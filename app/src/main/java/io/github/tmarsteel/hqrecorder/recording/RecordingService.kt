@@ -244,9 +244,13 @@ class RecordingService : Service() {
         }
 
         override fun startOrStopListening(command: StartOrStopListeningCommand, subscriber: Messenger?): StartOrStopListeningCommand.Response {
-            subscriber?.let(if (command.start) statusSubscribers::add else statusSubscribers::remove)
+            subscriber?.let(when (command.statusUpdates) {
+                StartOrStopListeningCommand.SubscriptionAction.SUBSCRIBE -> statusSubscribers::add
+                StartOrStopListeningCommand.SubscriptionAction.UNSUBSCRIBE -> statusSubscribers::remove
+                StartOrStopListeningCommand.SubscriptionAction.NO_ACTION -> ({})
+            })
 
-            if (!command.start) {
+            if (command.listen == StartOrStopListeningCommand.ListeningAction.STOP) {
                 return StartOrStopListeningCommand.Response(
                     StartOrStopListeningCommand.Response.Result.NOT_LISTENING
                 )
@@ -358,7 +362,7 @@ class RecordingService : Service() {
             state = configuredState
             val updatedConfigResponse = state.updateRecordingConfig(config)
             if (updatedConfigResponse.result == UpdateRecordingConfigCommand.Response.Result.OK) {
-                state.startOrStopListening(StartOrStopListeningCommand(start = true, statusSubscription = false), null)
+                state.startOrStopListening(StartOrStopListeningCommand(listen = StartOrStopListeningCommand.ListeningAction.START, statusUpdates = StartOrStopListeningCommand.SubscriptionAction.NO_ACTION), null)
                 (state as? ListeningAndPossiblyRecording)?.statusSubscribers?.addAll(this.statusSubscribers)
             }
             return updatedConfigResponse
@@ -388,9 +392,13 @@ class RecordingService : Service() {
             command: StartOrStopListeningCommand,
             subscriber: Messenger?
         ): StartOrStopListeningCommand.Response {
-            subscriber?.let(if (command.start) statusSubscribers::add else statusSubscribers::remove)
+            subscriber?.let(when (command.statusUpdates) {
+                StartOrStopListeningCommand.SubscriptionAction.SUBSCRIBE -> statusSubscribers::add
+                StartOrStopListeningCommand.SubscriptionAction.UNSUBSCRIBE -> statusSubscribers::remove
+                StartOrStopListeningCommand.SubscriptionAction.NO_ACTION -> ({})
+            })
 
-            if (command.start) {
+            if (command.listen == StartOrStopListeningCommand.ListeningAction.START) {
                 return StartOrStopListeningCommand.Response(
                     StartOrStopListeningCommand.Response.Result.LISTENING
                 )
