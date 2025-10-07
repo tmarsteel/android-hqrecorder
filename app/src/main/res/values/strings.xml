@@ -37,6 +37,7 @@
     <string name="notification_record_channel_name">Record in the background</string>
     <string name="notification_record_ready">Ready to record</string>
     <string name="notification_record_recording">Currently recording</string>
+    <string name="notification_record_action_stop">Stop</string>
 
     <string name="error_no_audio_manager">Couldn\'t access the AudioManager API</string>
 

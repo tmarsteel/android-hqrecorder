@@ -1,10 +1,7 @@
 package io.github.tmarsteel.hqrecorder.recording
 
 import android.Manifest
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.Service
+import android.app.*
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
@@ -13,18 +10,14 @@ import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
-import android.os.Handler
-import android.os.IBinder
-import android.os.Looper
-import android.os.Message
-import android.os.Messenger
+import android.os.*
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.getSystemService
 import io.github.tmarsteel.hqrecorder.R
 import io.github.tmarsteel.hqrecorder.util.bytesPerSecond
 import io.github.tmarsteel.hqrecorder.util.minBufferSizeInBytes
-import java.util.Collections
+import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -70,6 +63,22 @@ class RecordingService : Service() {
     }
 
     private fun createNotification(currentlyRecording: Boolean): Notification {
+        val stopAction = Notification.Action.Builder(
+            Icon.createWithResource(applicationContext, R.drawable.ic_stop_24),
+            getString(R.string.notification_record_action_stop),
+            PendingIntent.getForegroundService(
+                applicationContext,
+                REQUEST_CODE_FORCE_STOP_SERVICE,
+                Intent(applicationContext, RecordingService::class.java).apply {
+                    setAction(ACTION_FORCE_STOP_SERVICE)
+                },
+                PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE,
+            ),
+        )
+            .setContextual(false)
+            .setAuthenticationRequired(false)
+            .build()
+
         return Notification.Builder(this, NOTIFICATION_CHANNEL_ID_RECORDING_SERVICE)
             .setContentText(getString(if (currentlyRecording) {
                 R.string.notification_record_recording
@@ -80,6 +89,7 @@ class RecordingService : Service() {
             .setLocalOnly(true)
             .setOngoing(true)
             .setSmallIcon(R.drawable.ic_recording_notification)
+            .addAction(stopAction)
             .build()
     }
 
@@ -89,7 +99,11 @@ class RecordingService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.i(javaClass.name, "onStartCommand")
+        if (intent?.action == ACTION_FORCE_STOP_SERVICE) {
+            state.forceStop()
+            return START_NOT_STICKY
+        }
+
         return START_STICKY
     }
 
@@ -146,6 +160,7 @@ class RecordingService : Service() {
         fun startNewTake(): StartNewTakeCommand.Response
         fun finishTake(): FinishTakeCommand.Response
         fun onUnbind()
+        fun forceStop()
     }
 
     private inner class Initial : State {
@@ -192,6 +207,10 @@ class RecordingService : Service() {
         }
 
         override fun onUnbind() {
+            stopSelf()
+        }
+
+        override fun forceStop() {
             stopSelf()
         }
     }
@@ -283,9 +302,17 @@ class RecordingService : Service() {
             audioRecord = null
         }
 
-        override fun onUnbind() {
+        private fun stopService() {
             dispose()
             stopSelf()
+        }
+
+        override fun onUnbind() {
+            stopService()
+        }
+
+        override fun forceStop() {
+            stopService()
         }
     }
 
@@ -415,9 +442,20 @@ class RecordingService : Service() {
             // now in configured state
             state.onUnbind()
         }
+
+        override fun forceStop() {
+            assureTakeFinished()
+
+            internalStopListening(null)
+            // now in configured state
+            state.forceStop()
+        }
     }
 
     companion object {
+        const val REQUEST_CODE_FORCE_STOP_SERVICE = 1
+        val ACTION_FORCE_STOP_SERVICE = "force-stop"
+
         private fun isConfigValidFor(config: RecordingConfig, device: AudioDeviceInfo): Boolean {
             if (device.id != config.deviceId || config.deviceAddress != device.address) {
                 return false
