@@ -104,24 +104,26 @@ class RecordingsFragment : Fragment(), RecordingsTracksAdapter.TrackActionListen
             }
 
             requireActivity().runOnUiThread {
-                if (cursor.moveToFirst()) {
-                    binding.recordingsNoItemsInfo.visibility = View.INVISIBLE
-                } else {
-                    binding.recordingsNoItemsInfo.visibility = View.VISIBLE
-                    binding.recordingsTrackList.visibility = View.INVISIBLE
-                    return@runOnUiThread
+                cursor.use {
+                    if (cursor.moveToFirst()) {
+                        binding.recordingsNoItemsInfo.visibility = View.INVISIBLE
+                    } else {
+                        binding.recordingsNoItemsInfo.visibility = View.VISIBLE
+                        binding.recordingsTrackList.visibility = View.INVISIBLE
+                        return@runOnUiThread
+                    }
+
+                    for (columnIdx in 0 until cursor.columnCount) {
+                        Log.i(javaClass.name, "Column ${cursor.getColumnName(columnIdx)}: ${cursor.getType(columnIdx)}")
+                    }
+
+                    do {
+                        trackListAdapter.add(TrackInfo.fromMediaStoreCursor(cursor, queryFromUri))
+                        cursor.moveToNext()
+                    } while (!cursor.isAfterLast)
+
+                    trackListLoadedAtLeastOnce = true
                 }
-
-                for (columnIdx in 0 until cursor.columnCount) {
-                    Log.i(javaClass.name, "Column ${cursor.getColumnName(columnIdx)}: ${cursor.getType(columnIdx)}")
-                }
-
-                do {
-                    trackListAdapter.add(TrackInfo.fromMediaStoreCursor(cursor, queryFromUri))
-                    cursor.moveToNext()
-                } while (!cursor.isAfterLast)
-
-                trackListLoadedAtLeastOnce = true
             }
         }
 
