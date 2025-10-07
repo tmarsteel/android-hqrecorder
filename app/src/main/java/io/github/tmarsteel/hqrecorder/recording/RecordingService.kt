@@ -14,6 +14,7 @@ import android.os.*
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.getSystemService
+import io.github.tmarsteel.hqrecorder.MainActivity
 import io.github.tmarsteel.hqrecorder.R
 import io.github.tmarsteel.hqrecorder.util.bytesPerSecond
 import io.github.tmarsteel.hqrecorder.util.minBufferSizeInBytes
@@ -90,6 +91,12 @@ class RecordingService : Service() {
             .setOngoing(true)
             .setSmallIcon(R.drawable.ic_recording_notification)
             .addAction(stopAction)
+            .setContentIntent(PendingIntent.getActivity(
+                applicationContext,
+                REQUEST_CODE_SHOW_RECORD_SCREEN,
+                Intent(applicationContext, MainActivity::class.java),
+                PendingIntent.FLAG_IMMUTABLE,
+            ))
             .build()
     }
 
@@ -455,6 +462,8 @@ class RecordingService : Service() {
     companion object {
         const val REQUEST_CODE_FORCE_STOP_SERVICE = 1
         val ACTION_FORCE_STOP_SERVICE = "force-stop"
+
+        const val REQUEST_CODE_SHOW_RECORD_SCREEN = 2
 
         private fun isConfigValidFor(config: RecordingConfig, device: AudioDeviceInfo): Boolean {
             if (device.id != config.deviceId || config.deviceAddress != device.address) {
