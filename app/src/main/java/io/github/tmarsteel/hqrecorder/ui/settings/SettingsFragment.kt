@@ -12,8 +12,6 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
-import android.widget.ArrayAdapter
-import android.widget.Toast
 import androidx.core.content.getSystemService
 import androidx.core.view.MenuProvider
 import androidx.fragment.app.Fragment
@@ -171,9 +169,9 @@ class SettingsFragment : Fragment(), MenuProvider {
         }
     }
 
-    private val nextTrackId: Long get()= (trackConfigAdapter.items().maxOfOrNull { it.id } ?: 0L) + 1L
+    private val nextTrackId: Long get()= (trackConfigAdapter.trackConfigs.maxOfOrNull { it.id } ?: 0L) + 1L
     private val nextTrackFirstChannel: Channel get() {
-        val channelsInUse = trackConfigAdapter.items()
+        val channelsInUse = trackConfigAdapter.trackConfigs
             .flatMap {
                 sequenceOf(it.leftOrMonoDeviceChannel, it.rightDeviceChannel).filterNotNull()
             }
@@ -223,7 +221,7 @@ class SettingsFragment : Fragment(), MenuProvider {
             channelMask = selectedDeviceWithMask?.channelMask ?: RecordingConfig.INITIAL.channelMask,
             binding.settingsSamplingRateSpinner.selectedItem as Int,
             (binding.settingsSampleEncodingSpinner.selectedItem as SampleEncoding).encodingValue,
-            trackConfigAdapter.items().toList(),
+            trackConfigAdapter.trackConfigs.toMutableList(),
         )
     }
 
