@@ -15,7 +15,7 @@ value class ChannelMask(val mask: Int) : Parcelable, Comparable<ChannelMask> {
     val count: Int get()= mask.countOneBits()
 
     operator fun plus(channel: Channel): ChannelMask = ChannelMask(
-        mask + channel.maskForChannel
+        mask or channel.maskForChannel
     )
 
     override fun toString(): String {
