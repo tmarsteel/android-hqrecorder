@@ -20,7 +20,10 @@ import io.github.tmarsteel.hqrecorder.util.bytesPerSecond
 import io.github.tmarsteel.hqrecorder.util.minBufferSizeInBytes
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentSkipListMap
+import kotlin.concurrent.thread
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 const val NOTIFICATION_CHANNEL_ID_RECORDING_SERVICE = "recording_service"
 const val NOTIFICATION_ID_RECORDING_SERVICE_FG = 1
@@ -123,6 +126,44 @@ class RecordingService : Service() {
 
     override fun onDestroy() {
         Log.i(javaClass.name, "onDestroy")
+        retainableTakesGcThread.interrupt()
+        retainableTakesGcThread.join()
+        retainableTakes.forEach { it.value.discard() }
+        retainableTakes.clear()
+    }
+
+    val retainableTakes = ConcurrentSkipListMap<Int, TakeToMediaStoreMover>()
+    val retainableTakesGcThread = thread(start = true) {
+        while (true) {
+            val takesIterator = retainableTakes.iterator()
+            while (takesIterator.hasNext()) {
+                val (_, take) = takesIterator.next()
+                if (take.shouldDiscard(TAKE_LIFETIME)) {
+                    takesIterator.remove()
+                    take.discard()
+                }
+            }
+
+            try {
+                Thread.sleep(TAKE_LIFETIME.inWholeMilliseconds)
+            }
+            catch (_: InterruptedException) {
+                break
+            }
+        }
+    }
+
+    private fun tryRetainTake(id: Int): Boolean {
+        val take = retainableTakes.remove(id)
+            ?: return false
+
+        try {
+            take.assureFilesAreInMediaStore()
+            return true
+        }
+        catch (_: TakeToMediaStoreMover.TakeDiscardedException) {
+            return false
+        }
     }
 
     private var state: State = Initial()
@@ -153,6 +194,13 @@ class RecordingService : Service() {
                     val response = state.finishTake()
                     Log.i(javaClass.name, "command = $command, response = $response")
                     msg.replyTo?.send(FinishTakeCommand.Response.buildMessage(response))
+                }
+                RetainTakeCommand.WHAT_VALUE -> {
+                    val command = RetainTakeCommand.fromMessage(msg)!!
+                    val success = tryRetainTake(command.id)
+                    val response = RetainTakeCommand.Response(command.id, success)
+                    Log.i(javaClass.name, "command = $command, response = $response")
+                    msg.replyTo?.send(RetainTakeCommand.Response.buildMessage(response))
                 }
                 else -> {
                     Log.e(javaClass.name, "Unrecognized message $msg")
@@ -208,9 +256,7 @@ class RecordingService : Service() {
         }
 
         override fun finishTake(): FinishTakeCommand.Response {
-            return FinishTakeCommand.Response(
-                FinishTakeCommand.Response.Result.INVALID_STATE
-            )
+            return FinishTakeCommand.Response.INVALID_STATE
         }
 
         override fun onUnbind() {
@@ -300,9 +346,7 @@ class RecordingService : Service() {
         }
 
         override fun finishTake(): FinishTakeCommand.Response {
-            return FinishTakeCommand.Response(
-                FinishTakeCommand.Response.Result.INVALID_STATE
-            )
+            return FinishTakeCommand.Response.INVALID_STATE
         }
 
         fun dispose() {
@@ -374,6 +418,10 @@ class RecordingService : Service() {
                 listeningRunnable.executeCommandSync(TakeRecorderRunnable.Command.StopListening)
             }
 
+            if (retainableTakesGcThread.isAlive) {
+                retainableTakesGcThread.interrupt()
+            }
+
             state = configuredState
             val finalStatusUpdate = RecordingStatusServiceMessage.buildMessage(RecordingStatusServiceMessage(
                 isListening = false,
@@ -414,38 +462,48 @@ class RecordingService : Service() {
             )
         }
 
-        private fun assureTakeFinished(): Boolean {
+        private fun addRetainableTake(mover: TakeToMediaStoreMover): Int {
+            while (true) {
+                val idCandidate = (retainableTakes.keys.maxOrNull() ?: -1) + 1
+                if (retainableTakes.putIfAbsent(idCandidate, mover) == null) {
+                    return idCandidate
+                }
+            }
+        }
+
+        private fun assureTakeFinished(startNext: Boolean): TakeRecorderRunnable.Command.UnsavedTakeResponse? {
             if (!listeningThread.isAlive || !listeningRunnable.isRecording) {
-                return false
+                return null
             }
 
-            listeningRunnable.executeCommandSync(TakeRecorderRunnable.Command.FinishTake)
-            return true
+            return listeningRunnable.executeCommandSync(TakeRecorderRunnable.Command.FinishTake(startNext))
         }
 
         override fun startNewTake(): StartNewTakeCommand.Response {
-            val wasRecordingBefore = listeningThread.isAlive && listeningRunnable.isRecording
-            assureTakeFinished()
-            listeningRunnable.executeCommandSync(TakeRecorderRunnable.Command.NextTake)
-            if (!wasRecordingBefore) {
-                updateNotification(currentlyRecording = true)
+            if (listeningThread.isAlive && listeningRunnable.isRecording) {
+                return StartNewTakeCommand.Response(StartNewTakeCommand.Response.Result.ALREADY_RECORDING)
             }
+
+            listeningRunnable.executeCommandSync(TakeRecorderRunnable.Command.FinishTake(startNext = true))
+            updateNotification(currentlyRecording = true)
             return StartNewTakeCommand.Response(
                 StartNewTakeCommand.Response.Result.RECORDING
             )
         }
 
         override fun finishTake(): FinishTakeCommand.Response {
-            val wasRecording = assureTakeFinished()
-            return if (wasRecording) {
-                FinishTakeCommand.Response(
-                    FinishTakeCommand.Response.Result.FINISHED
-                )
-            } else {
-                FinishTakeCommand.Response(
-                    FinishTakeCommand.Response.Result.NOT_RECORDING
-                )
+            val finishResponse = assureTakeFinished(startNext = false)
+            if (finishResponse == null) {
+                return FinishTakeCommand.Response.INVALID_STATE
             }
+
+            return FinishTakeCommand.Response(
+                result = FinishTakeCommand.Response.Result.TAKE_FINISHED,
+                FinishTakeCommand.TakeResult(
+                    wasRecording = true,
+                    finishResponse.mover?.let(this::addRetainableTake),
+                )
+            )
         }
 
         override fun onUnbind() {
@@ -459,7 +517,8 @@ class RecordingService : Service() {
         }
 
         override fun forceStop() {
-            assureTakeFinished()
+            val response = assureTakeFinished(startNext = false)
+            response?.mover?.assureFilesAreInMediaStore()
 
             internalStopListening(null)
             // now in configured state
@@ -468,6 +527,7 @@ class RecordingService : Service() {
     }
 
     companion object {
+        val TAKE_LIFETIME = 15.seconds
         const val REQUEST_CODE_FORCE_STOP_SERVICE = 1
         val ACTION_FORCE_STOP_SERVICE = "force-stop"
 

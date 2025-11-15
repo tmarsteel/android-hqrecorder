@@ -6,8 +6,10 @@
 
     <string name="menu_apply_settings">Apply settings</string>
 
-    <string name="record_start_next_take">New Take</string>
-    <string name="record_start_finish">Finish</string>
+    <string name="record_start">Start recording</string>
+    <string name="record_stop">Stop recording</string>
+    <string name="record_save_and_next_take">Save &amp; Next</string>
+    <string name="record_discard_and_next_take">Discard &amp; Next</string>
     <string name="record_no_audio_permission">Could not get permission to access the microphone.</string>
     <string name="record_no_notification_permission">Recording will stop when you close the app. Allow notifications to fix this.</string>
     <string name="record_clip_indicator">Clip</string>
@@ -42,7 +44,10 @@
     <string name="error_no_audio_manager">Couldn\'t access the AudioManager API</string>
 
     <string name="toast_take_saved">Take saved.</string>
+    <string name="toast_take_discarded">Take discarded.</string>
+    <string name="toast_undo_take_discard">Keep take</string>
     <string name="toast_cant_listen_invalid_config">Failed to start recording, check the settings</string>
+    <string name="toast_cant_start_take_already_recording">An error occurred. Please stop the recording and restart the app.</string>
     <string name="toast_cant_listen_still_recording">Can\'t change the configuration, stop the recording first.</string>
     <string name="toast_cant_listen_no_mic_permission">You must grant the app permission to access the microphone.</string>
     <string name="toast_cant_listen_no_config">Can\'t access audio data, check the settings.</string>

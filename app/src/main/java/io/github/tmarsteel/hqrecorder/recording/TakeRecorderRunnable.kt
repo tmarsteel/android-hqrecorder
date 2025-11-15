@@ -1,25 +1,19 @@
 package io.github.tmarsteel.hqrecorder.recording
 
-import android.content.ContentValues
 import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
-import android.net.Uri
 import android.os.Messenger
-import android.provider.MediaStore
 import android.util.Log
 import io.github.tmarsteel.hqrecorder.util.convertSampleToFloat32
 import io.github.tmarsteel.hqrecorder.util.extractSampleBytes
 import java.io.Closeable
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatterBuilder
 import java.time.temporal.ChronoField
 import java.util.Locale
-import kotlin.collections.List
 import kotlin.math.max
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.nanoseconds
@@ -96,28 +90,42 @@ class TakeRecorderRunnable private constructor(
 
                 var commandNeedsListeningToStop = false
                 rcChannel.processNextCommand { nextCommand ->
-                    if (nextCommand == Command.FinishTake || (nextCommand == Command.NextTake && isRecording)) {
-                        trackStates.forEach {
-                            it.finishTake()
-                        }
+                    val pendingMove: TakeToMediaStoreMover?
+                    if (isRecording) {
+                        val finishedAt = System.nanoTime()
+                        pendingMove = TakeToMediaStoreMover(
+                            context,
+                            trackStates.map {
+                                it.finishTake()
+                            },
+                            finishedAt,
+                        )
                         isRecording = false
+                    } else {
+                        pendingMove = null
                     }
-                    if (nextCommand == Command.NextTake) {
-                        isRecording = true
-                        val timestamp = LocalDateTime.now()
-                        trackStates.forEach {
-                            it.startNewTake(timestamp)
+
+                    when (nextCommand) {
+                        is Command.FinishTake -> {
+                            if (nextCommand.startNext) {
+                                val timestamp = LocalDateTime.now()
+                                trackStates.forEach {
+                                    it.startNewTake(timestamp)
+                                }
+                                currentTakeStartedAtNanos = System.nanoTime()
+                                isRecording = true
+                            }
                         }
-                        currentTakeStartedAtNanos = System.nanoTime()
-                    }
-                    if (nextCommand == Command.StopListening) {
-                        if (isRecording) {
-                            Log.e(javaClass.name, "Cannot stop listening, still recording!!")
-                        } else {
-                            commandNeedsListeningToStop = true
+                        Command.StopListening -> {
+                            if (!isRecording) {
+                                commandNeedsListeningToStop = true
+                            }
                         }
                     }
+
+                    return@processNextCommand Command.UnsavedTakeResponse(pendingMove)
                 }
+
                 if (commandNeedsListeningToStop) {
                     break@listenLoop
                 }
@@ -150,13 +158,21 @@ class TakeRecorderRunnable private constructor(
             throw e
         }
         finally {
+            for (trackState in trackStates) {
+                try {
+                    trackState.flushDataToDisk()
+                }
+                catch (suppressed: Throwable) {}
+            }
+
             stopped = true
         }
         result = Result.SUCCESS
     }
 
-    fun executeCommandSync(command: Command) {
-        rcChannel.executeCommand(command, AUDIO_POLL_DELAY)
+    fun <R> executeCommandSync(command: NonBlockingThreadRemoteControl.RcCommand<R>): R {
+        check(command is Command)
+        return rcChannel.executeCommand(command, AUDIO_POLL_DELAY * 1.1)
     }
 
     @Volatile
@@ -169,10 +185,11 @@ class TakeRecorderRunnable private constructor(
         ;
     }
 
-    sealed class Command : NonBlockingThreadRemoteControl.RcCommand<Unit> {
-        object NextTake : Command()
-        object FinishTake : Command()
-        object StopListening : Command()
+    sealed class Command {
+        data class FinishTake(val startNext: Boolean) : Command(), NonBlockingThreadRemoteControl.RcCommand<UnsavedTakeResponse>
+        object StopListening : Command(), NonBlockingThreadRemoteControl.RcCommand<UnsavedTakeResponse>
+
+        data class UnsavedTakeResponse(val mover: TakeToMediaStoreMover?)
     }
 
     private data class TrackInListening(
@@ -181,7 +198,7 @@ class TakeRecorderRunnable private constructor(
         val sourceFormat: AudioFormat,
         val leftOrMonoChannelSampleIndexInFrame: Int,
         val rightChannelSampleIndexInFrame: Int?,
-    ) : Closeable {
+    ) {
         private var currentTake: TakeInRecording? = null
 
         var leftStatusSample: Float = 0.0f
@@ -223,66 +240,47 @@ class TakeRecorderRunnable private constructor(
             return max(accumulator, nextSample)
         }
 
-        fun finishTake() {
-            currentTake?.close()
+        fun flushDataToDisk() {
+            currentTake?.flush()
+        }
+
+        fun finishTake(): TakeToMediaStoreMover.TakeFile {
+            check(currentTake != null)
+            currentTake!!.close()
+            val data = currentTake!!.moverData
             currentTake = null
+            return data
         }
 
         fun startNewTake(timestamp: LocalDateTime) {
-            if (currentTake != null) {
-                finishTake()
-            }
-
+            check(currentTake == null)
             currentTake = TakeInRecording(timestamp)
         }
 
-        override fun close() {
-            finishTake()
-        }
-
         private inner class TakeInRecording(
-            val takeTimestamp: LocalDateTime,
+            takeTimestamp: LocalDateTime,
         ) : Closeable {
             private val writer = WavFileWriter(
-                File.createTempFile("take_${TIMESTAMP_FORMAT.format(takeTimestamp)}", track.label),
+                File.createTempFile("take_${TIMESTAMP_FORMAT.format(takeTimestamp)}_track${track.id}", "wav"),
                 track.rightDeviceChannel != null,
                 sourceFormat,
             )
 
-            val mediaUri: Uri
-            init {
-                val mediaStoreValues = ContentValues().apply {
-                    put(MediaStore.Audio.Media.DISPLAY_NAME, "${TIMESTAMP_FORMAT.format(takeTimestamp)}_${track.label}.wav")
-                    put(MediaStore.Audio.Media.IS_PENDING, 1)
-                    put(MediaStore.Audio.Media.IS_RECORDING, 1)
-                }
-                mediaUri = context.contentResolver.insert(
-                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                    mediaStoreValues
-                )!!
-                Log.d(javaClass.name, "Recording track ${track.id} of take $takeTimestamp to $mediaUri")
-            }
+            val moverData = TakeToMediaStoreMover.TakeFile(
+                writer.targetFile,
+                "${TIMESTAMP_FORMAT.format(takeTimestamp)}_${track.label}.wav",
+            )
 
             fun writeSampleData(src: ByteArray, off: Int, len: Int) {
                 writer.writeSampleData(src, off, len)
             }
 
+            fun flush() {
+                writer.flush()
+            }
+
             override fun close() {
                 writer.close()
-                FileOutputStream(context.contentResolver.openFileDescriptor(mediaUri, "w")!!.fileDescriptor).use { mediaStoreOut ->
-                    FileInputStream(writer.targetFile).use { tmpFileIn ->
-                        tmpFileIn.copyTo(mediaStoreOut)
-                    }
-                }
-                context.contentResolver.update(
-                    mediaUri,
-                    ContentValues().apply {
-                        put(MediaStore.Audio.Media.IS_PENDING, false)
-                    },
-                    null
-                )
-                Log.i(javaClass.name, "Copied ${writer.targetFile.absolutePath} to $mediaUri (${writer.targetFile.length()} bytes)")
-                writer.targetFile.delete()
             }
         }
     }

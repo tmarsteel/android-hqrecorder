@@ -57,6 +57,9 @@ class NonBlockingThreadRemoteControl(
         }
     }
 
+    /**
+     * to be used by the thread that is being controlled remotely
+     */
     fun processNextCommand(processor: (RcCommand<*>) -> Any) {
         check(Thread.currentThread() === controlledThread)
 
@@ -75,7 +78,7 @@ class NonBlockingThreadRemoteControl(
     interface RcCommand<Response>
 
     private sealed interface CommandResult {
-        class Response(val response: Any) : CommandResult
+        class Response(val response: Any?) : CommandResult
         class Failed(val exception: Throwable) : CommandResult
     }
 

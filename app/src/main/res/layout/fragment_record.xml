@@ -7,54 +7,16 @@
     android:paddingHorizontal="@dimen/activity_horizontal_margin"
     tools:context=".ui.record.RecordFragment">
 
-    <Button
-        android:id="@+id/record_next_take_bt"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        android:text="@string/record_start_next_take"
-        />
-    <Button
-        android:id="@+id/record_finish_bt"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toEndOf="@id/record_next_take_bt"
-        android:layout_marginStart="@dimen/activity_horizontal_margin"
-        android:text="@string/record_start_finish"
-        />
-
-    <ImageView
-        android:id="@+id/record_liveness_indicator"
-        android:layout_width="wrap_content"
-        android:layout_height="0dp"
-        app:layout_constraintWidth="wrap_content"
-        app:layout_constraintStart_toEndOf="@id/record_finish_bt"
-        app:layout_constraintTop_toTopOf="@id/record_finish_bt"
-        app:layout_constraintBottom_toBottomOf="@id/record_finish_bt"
-        android:layout_marginHorizontal="@dimen/default_inset"
-        android:src="@drawable/ic_not_recording"
-        android:scaleType="centerInside"
-        android:contentDescription="@string/record_indicator_description_not_recording"
-        />
-
-    <TextView
-        android:id="@+id/record_take_length"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        app:layout_constraintTop_toTopOf="@id/record_finish_bt"
-        app:layout_constraintBottom_toBottomOf="@id/record_finish_bt"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:textSize="24sp"
-        android:text="00:00"
+    <include
+        android:id="@+id/record_control"
+        layout="@layout/view_record_control"
         />
 
     <ListView
         android:id="@+id/record_track_list"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        app:layout_constraintTop_toBottomOf="@id/record_next_take_bt"
+        app:layout_constraintTop_toBottomOf="@id/record_control"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <Button
+        android:id="@+id/record_start_stop_bt"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        android:text="@string/record_start"
+        android:drawableStart="@drawable/ic_mic_24"
+        android:drawableTint="@color/design_default_color_on_primary"
+        />
+
+    <Button
+        android:id="@+id/record_save_and_next_bt"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintStart_toEndOf="@id/record_start_stop_bt"
+        app:layout_constraintTop_toTopOf="@id/record_start_stop_bt"
+        android:layout_marginStart="@dimen/activity_horizontal_margin"
+        android:text="@string/record_save_and_next_take"
+        android:drawableStart="@drawable/ic_save_24"
+        android:drawableTint="@color/design_default_color_on_primary"
+        />
+
+    <Button
+        android:id="@+id/record_discard_and_next_bt"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintStart_toEndOf="@id/record_save_and_next_bt"
+        app:layout_constraintTop_toTopOf="@id/record_start_stop_bt"
+        android:layout_marginStart="@dimen/activity_horizontal_margin"
+        android:text="@string/record_discard_and_next_take"
+        android:drawableStart="@drawable/ic_delete_24"
+        android:drawableTint="@color/design_default_color_on_primary"
+        />
+
+    <ImageView
+        android:id="@+id/record_liveness_indicator"
+        android:layout_width="wrap_content"
+        android:layout_height="0dp"
+        app:layout_constraintWidth="wrap_content"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/record_take_length"
+        android:layout_marginHorizontal="@dimen/default_inset"
+        android:src="@drawable/ic_not_recording"
+        android:scaleType="centerInside"
+        android:contentDescription="@string/record_indicator_description_not_recording"
+        />
+
+    <TextView
+        android:id="@+id/record_take_length"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:textSize="24sp"
+        android:text="00:00"
+        />
+</androidx.constraintlayout.widget.ConstraintLayout>

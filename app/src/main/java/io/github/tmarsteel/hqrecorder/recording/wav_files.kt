@@ -91,7 +91,7 @@ class WavFileWriter(
     }
     private var bufferFlushThreshold = writeBuffer.capacity() / 80
 
-    private fun flushBuffer() {
+    fun flush() {
         writeBuffer.flip()
         raf.write(writeBuffer.array(), writeBuffer.arrayOffset() + writeBuffer.position(), writeBuffer.limit() - writeBuffer.position())
         writeBuffer.clear()
@@ -114,7 +114,7 @@ class WavFileWriter(
         }
 
         if (writeBuffer.remaining() <= bufferFlushThreshold) {
-            flushBuffer()
+            flush()
         }
     }
 
@@ -122,7 +122,7 @@ class WavFileWriter(
     override fun close() {
         check(!closed)
         closed = true
-        flushBuffer()
+        flush()
         val fileSize = raf.length()
         raf.seek(0x04)
         raf.writeLEInt(fileSize.toInt() - 8)

@@ -9,18 +9,21 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.view.allViews
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.google.android.material.snackbar.Snackbar
 import io.github.tmarsteel.hqrecorder.MainActivity
 import io.github.tmarsteel.hqrecorder.R
 import io.github.tmarsteel.hqrecorder.databinding.FragmentRecordBinding
 import io.github.tmarsteel.hqrecorder.recording.FinishTakeCommand
 import io.github.tmarsteel.hqrecorder.recording.RecordingService
 import io.github.tmarsteel.hqrecorder.recording.RecordingStatusServiceMessage
+import io.github.tmarsteel.hqrecorder.recording.RetainTakeCommand
 import io.github.tmarsteel.hqrecorder.recording.StartNewTakeCommand
 import io.github.tmarsteel.hqrecorder.recording.StartOrStopListeningCommand
 import io.github.tmarsteel.hqrecorder.recording.UpdateRecordingConfigCommand
@@ -101,11 +104,18 @@ class RecordFragment : Fragment() {
         _binding = FragmentRecordBinding.inflate(inflater, container, false)
         val root: View = binding.root
 
-        binding.recordNextTakeBt.setOnClickListener {
+        setControlsEnabled(true)
+
+        binding.recordControl.recordStartStopBt.setOnClickListener {
+            this.startOrStop()
+        }
+        binding.recordControl.recordSaveAndNextBt.setOnClickListener {
+            this.finishTake(true)
             this.startRecordingNextTake()
         }
-        binding.recordFinishBt.setOnClickListener {
-            this.stopRecording()
+        binding.recordControl.recordDiscardAndNextBt.setOnClickListener {
+            this.finishTake(false)
+            this.startRecordingNextTake()
         }
         tracksAdapter = RecordTrackAdapter(requireContext())
         binding.recordTrackList.adapter = tracksAdapter
@@ -187,8 +197,11 @@ class RecordFragment : Fragment() {
         }
     }
 
+    private var isRecording = false
     private val bufferForIndicatorUpdate = FloatArray(2)
     private fun onStatusUpdate(update: RecordingStatusServiceMessage) {
+        isRecording = update.isRecording
+
         view?.allViews
             ?.filterIsInstance<SignalLevelIndicator>()
             ?.forEach { indicator ->
@@ -206,61 +219,84 @@ class RecordFragment : Fragment() {
             }
 
         _binding?.let { binding ->
-            binding.recordLivenessIndicator.setImageResource(if (update.isRecording) R.drawable.ic_recording else R.drawable.ic_not_recording)
+            binding.recordControl.recordStartStopBt.text = getString(if (isRecording) R.string.record_stop else R.string.record_start)
+            binding.recordControl.recordStartStopBt.setCompoundDrawables(
+                AppCompatResources.getDrawable(requireContext(), if (isRecording) R.drawable.ic_stop_24 else R.drawable.ic_mic_24),
+                null,
+                null,
+                null,
+            )
+            binding.recordControl.recordSaveAndNextBt.isEnabled = isRecording
+            binding.recordControl.recordDiscardAndNextBt.isEnabled = isRecording
+
+            binding.recordControl.recordLivenessIndicator.setImageResource(if (update.isRecording) R.drawable.ic_recording else R.drawable.ic_not_recording)
 
             val nMinutes = update.currentTakeDuration.inWholeMinutes
             val nSeconds = update.currentTakeDuration.inWholeSeconds % 60
-            binding.recordTakeLength.text = "${nMinutes.toString(10).padStart(2, '0')}:${nSeconds.toString(10).padStart(2, '0')}"
+            binding.recordControl.recordTakeLength.text = "${nMinutes.toString(10).padStart(2, '0')}:${nSeconds.toString(10).padStart(2, '0')}"
         }
     }
 
-    fun startRecordingNextTake() {
-        binding.recordNextTakeBt.isEnabled = false
-        binding.recordFinishBt.isEnabled = false
-        serviceInteractionQueue.put { comm ->
-            try {
-                val response = StartNewTakeCommand.Response.fromMessage(
-                    comm.exchangeWithService(StartNewTakeCommand.buildMessage())
-                )!!
-                when (response.result) {
-                    StartNewTakeCommand.Response.Result.RECORDING -> {
-                        // all good, as requested
-                    }
+    private fun setControlsEnabled(enabled: Boolean) {
+        binding.recordControl.recordStartStopBt.isEnabled = enabled
+        binding.recordControl.recordSaveAndNextBt.isEnabled = enabled && isRecording
+        binding.recordControl.recordDiscardAndNextBt.isEnabled = enabled && isRecording
+    }
 
-                    StartNewTakeCommand.Response.Result.INVALID_STATE -> {
-                        Toast.makeText(requireContext(), R.string.toast_cant_listen_invalid_config, Toast.LENGTH_LONG).show()
+    private fun finishTake(saveImmediately: Boolean) {
+        serviceInteractionQueue.put { comm ->
+            val response = FinishTakeCommand.Response.fromMessage(
+                comm.exchangeWithService(FinishTakeCommand.buildMessage())
+            )
+            when (response.result) {
+                FinishTakeCommand.Response.Result.TAKE_FINISHED -> {
+                    if (saveImmediately) {
+                        comm.exchangeWithService(RetainTakeCommand.buildMessage(response.takeResult.moveToMediaStoreId!!))
+                    } else {
+                        Snackbar.make(binding.root, R.string.toast_take_discarded, Snackbar.LENGTH_LONG)
+                            .setAction(R.string.toast_undo_take_discard, {
+                                serviceInteractionQueue.put { comm ->
+                                    comm.exchangeWithService(RetainTakeCommand.buildMessage(response.takeResult.moveToMediaStoreId!!))
+                                }
+                            })
+                            .show()
                     }
                 }
-            }
-            finally {
-                binding.recordNextTakeBt.isEnabled = true
-                binding.recordFinishBt.isEnabled = true
+
+                FinishTakeCommand.Response.Result.INVALID_STATE -> {
+                    Toast.makeText(requireContext(), R.string.toast_cant_finish_not_recording, Toast.LENGTH_SHORT)
+                        .show()
+                }
             }
         }
     }
 
-    private fun stopRecording() {
-        binding.recordNextTakeBt.isEnabled = false
-        binding.recordFinishBt.isEnabled = false
+    private fun startRecordingNextTake() {
         serviceInteractionQueue.put { comm ->
-            try {
-                val response = FinishTakeCommand.Response.fromMessage(
-                    comm.exchangeWithService(FinishTakeCommand.buildMessage())
-                )
-                when (response.result) {
-                    FinishTakeCommand.Response.Result.FINISHED -> {
-                        // all good, as requested
-                    }
-                    FinishTakeCommand.Response.Result.NOT_RECORDING,
-                    FinishTakeCommand.Response.Result.INVALID_STATE -> {
-                        Toast.makeText(requireContext(), R.string.toast_cant_finish_not_recording, Toast.LENGTH_SHORT).show()
-                    }
+            val response = StartNewTakeCommand.Response.fromMessage(
+                comm.exchangeWithService(StartNewTakeCommand.buildMessage())
+            )!!
+            when (response.result) {
+                StartNewTakeCommand.Response.Result.RECORDING -> {
+                    // all good, as requested
+                }
+
+                StartNewTakeCommand.Response.Result.INVALID_STATE -> {
+                    Toast.makeText(requireContext(), R.string.toast_cant_listen_invalid_config, Toast.LENGTH_LONG).show()
+                }
+
+                StartNewTakeCommand.Response.Result.ALREADY_RECORDING -> {
+                    Toast.makeText(requireContext(), R.string.toast_cant_start_take_already_recording, Toast.LENGTH_LONG).show()
                 }
             }
-            finally {
-                binding.recordNextTakeBt.isEnabled = true
-                binding.recordFinishBt.isEnabled = true
-            }
+        }
+    }
+
+    private fun startOrStop() {
+        if (isRecording) {
+            finishTake(saveImmediately = true)
+        } else {
+            startRecordingNextTake()
         }
     }
 
