@@ -18,6 +18,7 @@ import androidx.core.content.getSystemService
 import androidx.core.view.MenuProvider
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
+import com.google.android.material.snackbar.Snackbar
 import io.github.tmarsteel.hqrecorder.MainActivity
 import io.github.tmarsteel.hqrecorder.R
 import io.github.tmarsteel.hqrecorder.databinding.FragmentSettingsBinding
@@ -97,7 +98,7 @@ class SettingsFragment : Fragment(), MenuProvider {
 
         audioManager = requireContext().getSystemService<AudioManager>()
             ?: run {
-                Toast.makeText(requireContext(), R.string.error_no_audio_manager, Toast.LENGTH_LONG).show()
+                Snackbar.make(binding.root, R.string.error_no_audio_manager, Snackbar.LENGTH_LONG).show()
                 return root
             }
 

@@ -57,12 +57,12 @@ class RecordFragment : Fragment() {
                REQUEST_CODE_REQUEST_AUDIO_PERMISSIONS,
             )
             if (Manifest.permission.RECORD_AUDIO !in permissions) {
-                Toast.makeText(requireContext(), R.string.record_no_audio_permission, Toast.LENGTH_LONG).show()
+                Snackbar.make(binding.root, R.string.record_no_audio_permission, Snackbar.LENGTH_LONG).show()
                 return@launch
             }
 
             if (Manifest.permission.POST_NOTIFICATIONS !in permissions) {
-                Toast.makeText(requireContext(), R.string.record_no_notification_permission, Toast.LENGTH_LONG).show()
+                Snackbar.make(binding.root, R.string.record_no_notification_permission, Snackbar.LENGTH_LONG).show()
             }
 
             lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -145,7 +145,7 @@ class RecordFragment : Fragment() {
 
     private suspend fun setUpRecordingServiceAndStartListening(comm: CoroutineServiceCommunicator) {
         val config = recordingConfigViewModel.config ?: run {
-            Toast.makeText(requireContext(), R.string.toast_cant_listen_no_config, Toast.LENGTH_SHORT).show()
+            Snackbar.make(binding.root, R.string.toast_cant_listen_no_config, Snackbar.LENGTH_SHORT).show()
             return
         }
         val configResponse = UpdateRecordingConfigCommand.Response.fromMessage(
@@ -156,7 +156,7 @@ class RecordFragment : Fragment() {
                 // still recording; great update UI
             }
             UpdateRecordingConfigCommand.Response.Result.INVALID -> {
-                Toast.makeText(requireContext(), R.string.toast_cant_confgiure_invalid, Toast.LENGTH_LONG).show()
+                Snackbar.make(binding.root, R.string.toast_cant_confgiure_invalid, Snackbar.LENGTH_LONG).show()
                 return
             }
             UpdateRecordingConfigCommand.Response.Result.OK -> {
@@ -175,15 +175,15 @@ class RecordFragment : Fragment() {
                 // all good, recording will be reflected in the UI
             }
             StartOrStopListeningCommand.Response.Result.NO_PERMISSION -> {
-                Toast.makeText(requireContext(), R.string.toast_cant_listen_no_mic_permission, Toast.LENGTH_LONG).show()
+                Snackbar.make(binding.root, R.string.toast_cant_listen_no_mic_permission, Snackbar.LENGTH_LONG).show()
                 return
             }
             StartOrStopListeningCommand.Response.Result.NOT_CONFIGURED -> {
-                Toast.makeText(requireContext(), R.string.toast_cant_listen_no_config, Toast.LENGTH_LONG).show()
+                Snackbar.make(binding.root, R.string.toast_cant_listen_no_config, Snackbar.LENGTH_LONG).show()
                 return
             }
             StartOrStopListeningCommand.Response.Result.DEVICE_NOT_AVAILABLE -> {
-                Toast.makeText(requireContext(), R.string.toast_cant_listen_device_not_available, Toast.LENGTH_LONG).show()
+                Snackbar.make(binding.root, R.string.toast_cant_listen_device_not_available, Snackbar.LENGTH_LONG).show()
                 return
             }
             StartOrStopListeningCommand.Response.Result.NOT_LISTENING -> {
@@ -264,8 +264,7 @@ class RecordFragment : Fragment() {
                 }
 
                 FinishTakeCommand.Response.Result.INVALID_STATE -> {
-                    Toast.makeText(requireContext(), R.string.toast_cant_finish_not_recording, Toast.LENGTH_SHORT)
-                        .show()
+                    Snackbar.make(binding.root, R.string.toast_cant_finish_not_recording, Snackbar.LENGTH_SHORT).show()
                 }
             }
         }
@@ -282,11 +281,11 @@ class RecordFragment : Fragment() {
                 }
 
                 StartNewTakeCommand.Response.Result.INVALID_STATE -> {
-                    Toast.makeText(requireContext(), R.string.toast_cant_listen_invalid_config, Toast.LENGTH_LONG).show()
+                    Snackbar.make(binding.root, R.string.toast_cant_listen_invalid_config, Snackbar.LENGTH_LONG).show()
                 }
 
                 StartNewTakeCommand.Response.Result.ALREADY_RECORDING -> {
-                    Toast.makeText(requireContext(), R.string.toast_cant_start_take_already_recording, Toast.LENGTH_LONG).show()
+                    Snackbar.make(binding.root, R.string.toast_cant_start_take_already_recording, Snackbar.LENGTH_LONG).show()
                 }
             }
         }
