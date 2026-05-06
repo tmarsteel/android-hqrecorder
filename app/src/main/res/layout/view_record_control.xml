@@ -21,11 +21,13 @@
         android:layout_height="wrap_content"
         app:layout_constraintTop_toBottomOf="@id/record_start_stop_bt"
         app:layout_constraintStart_toStartOf="parent"
+        android:orientation="horizontal"
+        android:gravity="fill_vertical"
         >
         <Button
             android:id="@+id/record_save_and_next_bt"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
             android:text="@string/record_save_and_next_take"
             android:drawableStart="@drawable/ic_save_24"
             android:drawableTint="@color/design_default_color_on_primary"
@@ -34,15 +36,15 @@
 
         <Space
             android:layout_width="@dimen/activity_horizontal_margin"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:id="@+id/record_next_bts_spacer"
             android:layout_weight="0"
             />
 
         <Button
             android:id="@+id/record_discard_and_next_bt"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
             android:text="@string/record_discard_and_next_take"
             android:drawableStart="@drawable/ic_delete_24"
             android:drawableTint="@color/design_default_color_on_primary"
